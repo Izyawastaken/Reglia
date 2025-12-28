@@ -1,0 +1,30 @@
+# Eclipse
+bin
+*.launch
+.settings
+.metadata
+.classpath
+.project
+
+# IntelliJ IDEA
+out
+*.ipr
+*.iws
+*.iml
+.idea
+
+# Gradle
+build
+.gradle
+
+# Other
+eclipse
+run
+runs
+*.log
+
+# macOS
+.DS_Store
+
+# Generated resources
+src/generated/
