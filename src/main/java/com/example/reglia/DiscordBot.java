@@ -2,6 +2,8 @@ package com.example.reglia;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 import com.mojang.logging.LogUtils;
 import net.minecraft.network.chat.Component;
@@ -12,6 +14,8 @@ import org.slf4j.Logger;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.WebSocket;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -33,6 +37,7 @@ public class DiscordBot implements WebSocket.Listener {
     private Integer lastSequence = null;
     private boolean isReconnecting = false;
     private final AtomicBoolean isConnected = new AtomicBoolean(false);
+    private final StringBuilder messageBuffer = new StringBuilder();
 
     public DiscordBot() {
         this.client = HttpClient.newHttpClient();
@@ -105,29 +110,34 @@ public class DiscordBot implements WebSocket.Listener {
 
     @Override
     public CompletionStage<?> onText(WebSocket webSocket, CharSequence data, boolean last) {
-        try {
-            JsonObject json = JsonParser.parseString(data.toString()).getAsJsonObject();
-            int op = json.get("op").getAsInt();
-            if (json.has("s") && !json.get("s").isJsonNull()) {
-                lastSequence = json.get("s").getAsInt();
-            }
+        messageBuffer.append(data);
+        if (last) {
+            String fullMessage = messageBuffer.toString();
+            messageBuffer.setLength(0);
+            try {
+                JsonObject json = JsonParser.parseString(fullMessage).getAsJsonObject();
+                int op = json.get("op").getAsInt();
+                if (json.has("s") && !json.get("s").isJsonNull()) {
+                    lastSequence = json.get("s").getAsInt();
+                }
 
-            switch (op) {
-                case 10 -> handleHello(json);
-                case 0 -> handleDispatch(json);
-                case 7 -> {
-                    LOGGER.info("[Reglia] Reconnect requested.");
-                    webSocket.sendClose(WebSocket.NORMAL_CLOSURE, "Reconnect");
+                switch (op) {
+                    case 10 -> handleHello(json);
+                    case 0 -> handleDispatch(json);
+                    case 7 -> {
+                        LOGGER.info("[Reglia] Reconnect requested.");
+                        webSocket.sendClose(WebSocket.NORMAL_CLOSURE, "Reconnect");
+                    }
+                    case 9 -> {
+                        LOGGER.warn("[Reglia] Invalid Session.");
+                        sessionId = null;
+                        lastSequence = null;
+                        sendIdentify();
+                    }
                 }
-                case 9 -> {
-                    LOGGER.warn("[Reglia] Invalid Session.");
-                    sessionId = null;
-                    lastSequence = null;
-                    sendIdentify();
-                }
+            } catch (Exception e) {
+                LOGGER.error("[Reglia] Error Parsing: " + e.getMessage());
             }
-        } catch (Exception e) {
-            LOGGER.error("[Reglia] Error: " + e.getMessage());
         }
         webSocket.request(1);
         return null;
@@ -135,7 +145,7 @@ public class DiscordBot implements WebSocket.Listener {
     
     @Override
     public void onError(WebSocket webSocket, Throwable error) {
-        LOGGER.error("[Reglia] Error: " + error.getMessage());
+        LOGGER.error("[Reglia] Socket Error: " + error.getMessage());
         isConnected.set(false);
     }
     
@@ -220,36 +230,80 @@ public class DiscordBot implements WebSocket.Listener {
         if (isBot) return;
         if (Config.hasChannelId() && !Config.channelId.equals(channelId)) return;
 
-        String gifUrl = findGif(d, content);
-        if (content.isEmpty() && gifUrl == null) return;
+        List<String> gifUrls = findAllGifs(d, content);
+        if (content.isEmpty() && gifUrls.isEmpty()) return;
 
         final String finalContent = content;
-        final String finalGif = gifUrl;
+        final List<String> finalGifs = gifUrls;
 
         if (server != null) {
             server.execute(() -> {
-                String msg = "§9[Discord] §f" + author + "§7: §f" + finalContent;
-                if (finalGif != null) msg += " §6[GIF Preview]";
+                String msgText = finalContent;
+                // Remove GIF links from text to avoid clutter
+                for (String gif : finalGifs) {
+                    if (msgText.contains(gif)) {
+                        msgText = msgText.replace(gif, "").trim();
+                    }
+                }
+
+                String msg = "§9[Discord] §f" + author + "§7: §f" + msgText;
+                for (String gif : finalGifs) {
+                    // Reserve 4 lines of space for each GIF
+                    msg += "§r\n \n \n \n§6[GIF:" + gif + "]";
+                }
                 broadcast(msg);
             });
         }
     }
 
-    private String findGif(JsonObject d, String content) {
+    private List<String> findAllGifs(JsonObject d, String content) {
+        List<String> gifs = new ArrayList<>();
+        
+        // Check Attachments
         if (d.has("attachments")) {
-            for (com.google.gson.JsonElement a : d.getAsJsonArray("attachments")) {
+            for (JsonElement a : d.getAsJsonArray("attachments")) {
                 JsonObject obj = a.getAsJsonObject();
-                String url = obj.get("url").getAsString();
-                String type = obj.has("content_type") ? obj.get("content_type").getAsString() : "";
-                if (type.equals("image/gif") || url.toLowerCase().endsWith(".gif")) return url;
+                if (obj.has("url")) {
+                    String url = obj.get("url").getAsString();
+                    String type = obj.has("content_type") ? obj.get("content_type").getAsString() : "";
+                    if (type.equals("image/gif") || url.toLowerCase().endsWith(".gif")) {
+                        if (!gifs.contains(url)) gifs.add(url);
+                    }
+                }
             }
         }
-        if (content.contains("tenor.com") || content.contains("giphy.com")) {
+        
+        // Check Embeds (Discord often puts GIF links here)
+        if (d.has("embeds")) {
+            for (JsonElement e : d.getAsJsonArray("embeds")) {
+                JsonObject embed = e.getAsJsonObject();
+                if (embed.has("url")) {
+                    String url = embed.get("url").getAsString();
+                    if (url.contains("tenor.com") || url.contains("giphy.com") || url.toLowerCase().endsWith(".gif")) {
+                        if (!gifs.contains(url)) gifs.add(url);
+                    }
+                }
+                if (embed.has("thumbnail")) {
+                   String thumb = embed.getAsJsonObject("thumbnail").get("url").getAsString();
+                   if (thumb.toLowerCase().endsWith(".gif")) {
+                        if (!gifs.contains(thumb)) gifs.add(thumb);
+                   }
+                }
+            }
+        }
+        
+        // Check Content for links
+        if (content.contains("http")) {
             for (String word : content.split("\\s+")) {
-                if (word.startsWith("http")) return word;
+                if (word.startsWith("http")) {
+                    if (word.contains("tenor.com") || word.contains("giphy.com") || word.toLowerCase().endsWith(".gif")) {
+                         if (!gifs.contains(word)) gifs.add(word);
+                    }
+                }
             }
         }
-        return null;
+        
+        return gifs;
     }
     
     private void broadcast(String text) {

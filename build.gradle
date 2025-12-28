@@ -4,10 +4,11 @@ plugins {
     id 'idea'
     id 'maven-publish'
     id 'net.minecraftforge.gradle' version '[6.0.16,6.2)'
+    id 'org.spongepowered.mixin' version '0.7.+'
 }
 
-version = mod_version
-group = mod_group_id
+version = '2.0.0'
+group = 'com.example.reglia'
 
 repositories {
     mavenLocal()
@@ -16,16 +17,15 @@ repositories {
 }
 
 base {
-    archivesName = mod_id
+    archivesName = 'reglia-2.0'
 }
 
-java.toolchain.languageVersion = JavaLanguageVersion.of(java_version)
+java.toolchain.languageVersion = JavaLanguageVersion.of(17)
 
-// Enable Jar-in-Jar BEFORE minecraft block (per Forge docs)
 jarJar.enable()
 
 minecraft {
-    mappings channel: mapping_channel, version: mapping_version
+    mappings channel: 'official', version: '1.20.1'
 
     copyIdeResources = true
 
@@ -36,55 +36,61 @@ minecraft {
             property 'forge.logging.markers', 'REGISTRIES'
             property 'forge.logging.console.level', 'debug'
 
+            property 'mixin.env.remapRefMap', 'true'
+            property 'mixin.env.refMapRemappingFile', "${projectDir}/build/createSrgToMcp/output.srg"
+
             mods {
-                "${mod_id}" {
+                'reglia' {
                     source sourceSets.main
                 }
             }
         }
 
         client {
-            property 'forge.enabledGameTestNamespaces', mod_id
+            property 'forge.enabledGameTestNamespaces', 'reglia'
+            arg '-mixin.config=reglia.mixins.json'
         }
 
         server {
-            property 'forge.enabledGameTestNamespaces', mod_id
+            property 'forge.enabledGameTestNamespaces', 'reglia'
             args '--nogui'
         }
 
         gameTestServer {
-            property 'forge.enabledGameTestNamespaces', mod_id
+            property 'forge.enabledGameTestNamespaces', 'reglia'
         }
 
         data {
-            args '--mod', mod_id, '--all', '--output', file('src/generated/resources/').getAbsolutePath(), '--existing', file('src/main/resources/').getAbsolutePath()
+            args '--mod', 'reglia', '--all', '--output', file('src/generated/resources/').getAbsolutePath(), '--existing', file('src/main/resources/').getAbsolutePath()
         }
     }
 }
 
 sourceSets.main.resources { srcDir 'src/generated/resources' }
 
+mixin {
+    add sourceSets.main, "reglia.refmap.json"
+    config "reglia.mixins.json"
+}
+
 dependencies {
-    minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
-    
-    // Native Discord Bot (Uses internal Java 17 WebSocket)
-    // Gson is needed for JSON parsing (Minecraft provides it at runtime, but we need it for compile)
+    minecraft "net.minecraftforge:forge:1.20.1-47.3.0"
     implementation 'com.google.code.gson:gson:2.10.1'
 }
 
 tasks.named('processResources', ProcessResources).configure {
     var replaceProperties = [
-        minecraft_version: minecraft_version,
-        minecraft_version_range: minecraft_version_range,
-        forge_version: forge_version,
-        forge_version_range: forge_version_range,
-        loader_version_range: loader_version_range,
-        mod_id: mod_id,
-        mod_name: mod_name,
-        mod_license: mod_license,
-        mod_version: mod_version,
-        mod_authors: mod_authors,
-        mod_description: mod_description,
+        minecraft_version: '1.20.1',
+        minecraft_version_range: '[1.20.1,1.21)',
+        forge_version: '47.3.0',
+        forge_version_range: '[47,)',
+        loader_version_range: '[47,)',
+        mod_id: 'reglia',
+        mod_name: 'Reglia',
+        mod_license: 'All Rights Reserved',
+        mod_version: '1.0.0',
+        mod_authors: 'Your Name',
+        mod_description: 'Discord Bridge mod with GIF previews',
     ]
     inputs.properties replaceProperties
 
@@ -96,13 +102,14 @@ tasks.named('processResources', ProcessResources).configure {
 tasks.named('jar', Jar).configure {
     manifest {
         attributes([
-            'Specification-Title'     : mod_id,
-            'Specification-Vendor'    : mod_authors,
+            'Specification-Title'     : 'reglia',
+            'Specification-Vendor'    : 'Your Name',
             'Specification-Version'   : '1',
             'Implementation-Title'    : project.name,
             'Implementation-Version'  : project.jar.archiveVersion,
-            'Implementation-Vendor'   : mod_authors,
-            'Implementation-Timestamp': new Date().format("yyyy-MM-dd'T'HH:mm:ssZ")
+            'Implementation-Vendor'   : 'Your Name',
+            'Implementation-Timestamp': new Date().format("yyyy-MM-dd'T'HH:mm:ssZ"),
+            'MixinConfigs': 'reglia.mixins.json'
         ])
     }
     finalizedBy 'reobfJar'
