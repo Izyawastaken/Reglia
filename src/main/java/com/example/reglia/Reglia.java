@@ -3,7 +3,6 @@ package com.example.reglia;
 import com.mojang.logging.LogUtils;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.server.ServerStartingEvent;
-import net.minecraftforge.event.server.ServerStoppingEvent;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.ModLoadingContext;
@@ -15,7 +14,7 @@ import org.slf4j.Logger;
 
 /**
  * Reglia - Discord Bridge Mod
- * Two-way bridge between Minecraft chat and Discord.
+ * Sends in-game chat to Discord via webhooks.
  */
 @Mod(Reglia.MOD_ID)
 public class Reglia {
@@ -41,22 +40,7 @@ public class Reglia {
 
     @SubscribeEvent
     public void onServerStarting(ServerStartingEvent event) {
-        // Register commands
         ModCommands.register(event.getServer().getCommands().getDispatcher());
         LOGGER.info("Reglia: Commands registered!");
-
-        // Start Discord bot if token is configured
-        DiscordBot.start(event.getServer());
-    }
-
-    @SubscribeEvent
-    public void onServerStopping(ServerStoppingEvent event) {
-        // Clean shutdown of Discord bot
-        DiscordBot.stop();
-
-        // Send disconnect message to Discord
-        if (Config.hasWebhook()) {
-            DiscordWebhook.sendMessage("🔴 Server stopped", "Server");
-        }
     }
 }

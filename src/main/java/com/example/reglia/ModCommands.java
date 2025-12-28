@@ -8,28 +8,16 @@ import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
 
 /**
- * Registers mod commands for Reglia Discord Bridge.
+ * Commands for Reglia Discord Bridge.
  */
 public class ModCommands {
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
-        // /setwebhook <url> - Set webhook for Minecraft -> Discord
+        // /setwebhook <url>
         dispatcher.register(Commands.literal("setwebhook")
                 .requires(source -> source.hasPermission(2))
                 .then(Commands.argument("url", StringArgumentType.greedyString())
                         .executes(ModCommands::setWebhook)));
-
-        // /setbottoken <token> - Set bot token for Discord -> Minecraft
-        dispatcher.register(Commands.literal("setbottoken")
-                .requires(source -> source.hasPermission(4)) // Requires OP level 4 (owner only!)
-                .then(Commands.argument("token", StringArgumentType.greedyString())
-                        .executes(ModCommands::setBotToken)));
-
-        // /setchannel <id> - Set channel ID to listen to
-        dispatcher.register(Commands.literal("setchannel")
-                .requires(source -> source.hasPermission(2))
-                .then(Commands.argument("id", StringArgumentType.string())
-                        .executes(ModCommands::setChannel)));
 
         // /discord status|test|toggle
         dispatcher.register(Commands.literal("discord")
@@ -40,10 +28,7 @@ public class ModCommands {
                         .executes(ModCommands::testWebhook))
                 .then(Commands.literal("toggle")
                         .requires(source -> source.hasPermission(2))
-                        .executes(ModCommands::toggle))
-                .then(Commands.literal("reconnect")
-                        .requires(source -> source.hasPermission(2))
-                        .executes(ModCommands::reconnect)));
+                        .executes(ModCommands::toggle)));
     }
 
     private static int setWebhook(CommandContext<CommandSourceStack> context) {
@@ -56,62 +41,21 @@ public class ModCommands {
         }
 
         Config.setWebhookUrl(url);
-        context.getSource().sendSuccess(() -> Component.literal("§aWebhook set! Minecraft → Discord enabled."), true);
-        DiscordWebhook.sendMessage("✅ Reglia connected!", "Server");
-
-        return 1;
-    }
-
-    private static int setBotToken(CommandContext<CommandSourceStack> context) {
-        String token = StringArgumentType.getString(context, "token");
-
-        Config.setBotToken(token);
-        context.getSource().sendSuccess(() -> Component.literal("§aBot token set! Restarting bot..."), true);
-
-        // Restart the bot with new token
-        DiscordBot.restart();
-
-        return 1;
-    }
-
-    private static int setChannel(CommandContext<CommandSourceStack> context) {
-        String channelId = StringArgumentType.getString(context, "id");
-
-        Config.setChannelId(channelId);
-        context.getSource().sendSuccess(() -> Component.literal("§aChannel ID set to: §e" + channelId), true);
+        context.getSource().sendSuccess(() -> Component.literal("§aWebhook set successfully!"), true);
+        DiscordWebhook.sendMessage("✅ Reglia Discord Bridge connected!", "Server");
 
         return 1;
     }
 
     private static int status(CommandContext<CommandSourceStack> context) {
-        StringBuilder status = new StringBuilder("§6[Reglia] §fDiscord Bridge Status:\n");
-
-        // Webhook status
         if (Config.hasWebhook()) {
-            status.append("§7Webhook (MC→Discord): §aConfigured\n");
+            String status = Config.bridgeEnabled ? "§aEnabled" : "§cDisabled";
+            context.getSource().sendSuccess(() -> Component.literal(
+                    "§6[Reglia] §fDiscord Bridge: " + status + "\n§7Webhook: §aConfigured"), false);
         } else {
-            status.append("§7Webhook (MC→Discord): §cNot configured\n");
+            context.getSource().sendSuccess(() -> Component.literal(
+                    "§6[Reglia] §cNo webhook configured\n§7Use: §e/setwebhook <url>"), false);
         }
-
-        // Bot status
-        if (Config.hasBotToken()) {
-            if (DiscordBot.isConnected()) {
-                status.append("§7Bot (Discord→MC): §aConnected\n");
-            } else {
-                status.append("§7Bot (Discord→MC): §eToken set but not connected\n");
-            }
-        } else {
-            status.append("§7Bot (Discord→MC): §cNo token configured\n");
-        }
-
-        // Channel status
-        if (Config.hasChannelId()) {
-            status.append("§7Channel ID: §e").append(Config.channelId);
-        } else {
-            status.append("§7Channel ID: §cNot set (listening to all channels)");
-        }
-
-        context.getSource().sendSuccess(() -> Component.literal(status.toString()), false);
         return 1;
     }
 
@@ -126,7 +70,7 @@ public class ModCommands {
         if (success) {
             context.getSource().sendSuccess(() -> Component.literal("§aTest message sent!"), false);
         } else {
-            context.getSource().sendFailure(Component.literal("§cFailed to send message."));
+            context.getSource().sendFailure(Component.literal("§cFailed to send."));
         }
 
         return success ? 1 : 0;
@@ -136,19 +80,6 @@ public class ModCommands {
         Config.bridgeEnabled = !Config.bridgeEnabled;
         String status = Config.bridgeEnabled ? "§aenabled" : "§cdisabled";
         context.getSource().sendSuccess(() -> Component.literal("§6[Reglia] §fBridge " + status), true);
-        return 1;
-    }
-
-    private static int reconnect(CommandContext<CommandSourceStack> context) {
-        context.getSource().sendSuccess(() -> Component.literal("§6[Reglia] §fReconnecting bot..."), false);
-        DiscordBot.restart();
-
-        if (DiscordBot.isConnected()) {
-            context.getSource().sendSuccess(() -> Component.literal("§aBot reconnected!"), false);
-        } else {
-            context.getSource().sendFailure(Component.literal("§cFailed to reconnect. Check token."));
-        }
-
         return 1;
     }
 }

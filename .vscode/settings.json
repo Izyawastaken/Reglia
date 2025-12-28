@@ -1,3 +1,8 @@
 {
-    "java.configuration.updateBuildConfiguration": "interactive"
+    "java.configuration.updateBuildConfiguration": "automatic",
+    "java.compile.nullAnalysis.mode": "automatic",
+    "java.project.sourcePaths": ["src/main/java", "src/main/resources"],
+    "java.project.referencedLibraries": [
+        "build/libs/**/*.jar"
+    ]
 }
