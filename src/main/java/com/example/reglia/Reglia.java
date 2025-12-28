@@ -3,6 +3,7 @@ package com.example.reglia;
 import com.mojang.logging.LogUtils;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.server.ServerStartingEvent;
+import net.minecraftforge.event.server.ServerStoppingEvent;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.ModLoadingContext;
@@ -13,8 +14,7 @@ import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import org.slf4j.Logger;
 
 /**
- * Reglia - Discord Bridge Mod
- * Sends in-game chat to Discord via webhooks.
+ * Reglia - Two-way Discord Bridge Mod
  */
 @Mod(Reglia.MOD_ID)
 public class Reglia {
@@ -23,7 +23,6 @@ public class Reglia {
 
     public Reglia() {
         IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
-
         modEventBus.addListener(this::commonSetup);
 
         MinecraftForge.EVENT_BUS.register(this);
@@ -35,12 +34,21 @@ public class Reglia {
     }
 
     private void commonSetup(final FMLCommonSetupEvent event) {
-        LOGGER.info("Reglia: Discord Bridge ready!");
+        LOGGER.info("Reglia ready!");
     }
 
     @SubscribeEvent
     public void onServerStarting(ServerStartingEvent event) {
         ModCommands.register(event.getServer().getCommands().getDispatcher());
-        LOGGER.info("Reglia: Commands registered!");
+        DiscordBot.start(event.getServer());
+        LOGGER.info("Reglia: Commands registered, Discord bot starting...");
+    }
+
+    @SubscribeEvent
+    public void onServerStopping(ServerStoppingEvent event) {
+        DiscordBot.stop();
+        if (Config.hasWebhook()) {
+            DiscordWebhook.sendMessage("🔴 Server stopped", "Server");
+        }
     }
 }

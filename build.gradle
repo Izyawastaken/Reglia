@@ -12,6 +12,7 @@ group = mod_group_id
 repositories {
     mavenLocal()
     maven { url = 'https://maven.minecraftforge.net/' }
+    mavenCentral()
 }
 
 base {
@@ -19,6 +20,9 @@ base {
 }
 
 java.toolchain.languageVersion = JavaLanguageVersion.of(java_version)
+
+// Enable Jar-in-Jar BEFORE minecraft block (per Forge docs)
+jarJar.enable()
 
 minecraft {
     mappings channel: mapping_channel, version: mapping_version
@@ -62,6 +66,10 @@ sourceSets.main.resources { srcDir 'src/generated/resources' }
 
 dependencies {
     minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
+    
+    // Native Discord Bot (Uses internal Java 17 WebSocket)
+    // Gson is needed for JSON parsing (Minecraft provides it at runtime, but we need it for compile)
+    implementation 'com.google.code.gson:gson:2.10.1'
 }
 
 tasks.named('processResources', ProcessResources).configure {
