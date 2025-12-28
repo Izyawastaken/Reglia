@@ -36,13 +36,13 @@ public class DiscordBot implements WebSocket.Listener {
 
     public DiscordBot() {
         this.client = HttpClient.newHttpClient();
-        this.scheduler = Executors.newScheduledThreadPool(2); // Heartbeat + Reconnect
+        this.scheduler = Executors.newScheduledThreadPool(2);
     }
 
     public static void start(MinecraftServer mcServer) {
         server = mcServer;
         if (!Config.hasBotToken()) {
-            LOGGER.info("[Reglia] No bot token execution. Use /setbottoken");
+            LOGGER.info("[Reglia] No bot token found.");
             return;
         }
         if (instance != null) instance.shutdown();
@@ -68,11 +68,10 @@ public class DiscordBot implements WebSocket.Listener {
 
     private void connect() {
         try {
-            LOGGER.info("[Reglia] Connecting to Discord Gateway...");
-            client.newWebSocketBuilder()
-                    .buildAsync(URI.create(GATEWAY_URL), this);
+            LOGGER.info("[Reglia] Connecting to Gateway...");
+            client.newWebSocketBuilder().buildAsync(URI.create(GATEWAY_URL), this);
         } catch (Exception e) {
-            LOGGER.error("[Reglia] Failed to connect: " + e.getMessage());
+            LOGGER.error("[Reglia] Connection failed: " + e.getMessage());
             scheduleReconnect();
         }
     }
@@ -80,7 +79,7 @@ public class DiscordBot implements WebSocket.Listener {
     private void shutdown() {
         isConnected.set(false);
         if (webSocket != null) {
-            webSocket.sendClose(WebSocket.NORMAL_CLOSURE, "Shutting down");
+            webSocket.sendClose(WebSocket.NORMAL_CLOSURE, "Shutdown");
             webSocket = null;
         }
         if (scheduler != null && !scheduler.isShutdown()) {
@@ -89,8 +88,7 @@ public class DiscordBot implements WebSocket.Listener {
     }
 
     private void scheduleReconnect() {
-        if (scheduler.isShutdown()) return;
-        LOGGER.info("[Reglia] Reconnecting in 5 seconds...");
+        if (scheduler == null || scheduler.isShutdown()) return;
         scheduler.schedule(() -> {
             isReconnecting = true;
             connect();
@@ -101,7 +99,7 @@ public class DiscordBot implements WebSocket.Listener {
     public void onOpen(WebSocket webSocket) {
         this.webSocket = webSocket;
         this.isConnected.set(true);
-        LOGGER.info("[Reglia] WebSocket Connection Opened!");
+        LOGGER.info("[Reglia] WebSocket Connected!");
         webSocket.request(1);
     }
 
@@ -110,33 +108,26 @@ public class DiscordBot implements WebSocket.Listener {
         try {
             JsonObject json = JsonParser.parseString(data.toString()).getAsJsonObject();
             int op = json.get("op").getAsInt();
-            
             if (json.has("s") && !json.get("s").isJsonNull()) {
                 lastSequence = json.get("s").getAsInt();
             }
 
             switch (op) {
-                case 10: // Hello
-                    handleHello(json);
-                    break;
-                case 0: // Dispatch
-                    handleDispatch(json);
-                    break;
-                case 7: // Reconnect
-                    LOGGER.info("[Reglia] Server requested reconnect.");
-                    webSocket.sendClose(WebSocket.NORMAL_CLOSURE, "Reconnect requested");
-                    break;
-                case 9: // Invalid Session
-                    LOGGER.warn("[Reglia] Invalid Session. Clearing session and identifying.");
-                    sessionId = null;  // Cannot update
+                case 10 -> handleHello(json);
+                case 0 -> handleDispatch(json);
+                case 7 -> {
+                    LOGGER.info("[Reglia] Reconnect requested.");
+                    webSocket.sendClose(WebSocket.NORMAL_CLOSURE, "Reconnect");
+                }
+                case 9 -> {
+                    LOGGER.warn("[Reglia] Invalid Session.");
+                    sessionId = null;
                     lastSequence = null;
-                    sendIdentify(); 
-                    break;
-                case 11: // Heartbeat ACK
-                    break;
+                    sendIdentify();
+                }
             }
         } catch (Exception e) {
-            LOGGER.error("[Reglia] Payload Error: " + e.getMessage());
+            LOGGER.error("[Reglia] Error: " + e.getMessage());
         }
         webSocket.request(1);
         return null;
@@ -144,27 +135,20 @@ public class DiscordBot implements WebSocket.Listener {
     
     @Override
     public void onError(WebSocket webSocket, Throwable error) {
-        LOGGER.error("[Reglia] WebSocket Error: " + error.getMessage());
+        LOGGER.error("[Reglia] Error: " + error.getMessage());
         isConnected.set(false);
     }
     
     @Override
     public CompletionStage<?> onClose(WebSocket webSocket, int statusCode, String reason) {
-        LOGGER.info("[Reglia] Closed: " + statusCode + " - " + reason);
+        LOGGER.info("[Reglia] Closed: " + statusCode);
         isConnected.set(false);
-        
-        // Don't reconnect if intentional shutdown (1000) or auth failure (4004)
-        if (statusCode != 1000 && statusCode != 4004) {
-            scheduleReconnect();
-        }
+        if (statusCode != 1000 && statusCode != 4004) scheduleReconnect();
         return null;
     }
 
     private void handleHello(JsonObject json) {
-        int heartbeatInterval = json.getAsJsonObject("d").get("heartbeat_interval").getAsInt();
-        LOGGER.info("[Reglia] Heartbeat interval: " + heartbeatInterval + "ms");
-        
-        // Heartbeat Loop
+        int interval = json.getAsJsonObject("d").get("heartbeat_interval").getAsInt();
         scheduler.scheduleAtFixedRate(() -> {
             try {
                 if (this.webSocket != null) {
@@ -174,49 +158,38 @@ public class DiscordBot implements WebSocket.Listener {
                     this.webSocket.sendText(heartbeat.toString(), true);
                 }
             } catch (Exception e) {
-                LOGGER.error("Heartbeat failed: " + e.getMessage());
+                LOGGER.error("Heartbeat error: " + e.getMessage());
             }
-        }, 0, heartbeatInterval, TimeUnit.MILLISECONDS);
+        }, 0, interval, TimeUnit.MILLISECONDS);
 
-        // Resume if we have session, otherwise Identify
-        if (sessionId != null && isReconnecting) {
-            sendResume();
-        } else {
-            sendIdentify();
-        }
+        if (sessionId != null && isReconnecting) sendResume();
+        else sendIdentify();
     }
 
     private void sendIdentify() {
-        LOGGER.info("[Reglia] Sending Identify...");
         JsonObject identify = new JsonObject();
         identify.addProperty("op", 2);
-        
         JsonObject d = new JsonObject();
         d.addProperty("token", Config.botToken);
-        d.addProperty("intents", 33280); 
-        
-        JsonObject properties = new JsonObject();
-        properties.addProperty("os", "linux");
-        properties.addProperty("browser", "RegliaMod");
-        properties.addProperty("device", "RegliaMod");
-        d.add("properties", properties);
+        d.addProperty("intents", 33280);
+        JsonObject p = new JsonObject();
+        p.addProperty("os", "linux");
+        p.addProperty("browser", "Reglia");
+        p.addProperty("device", "Reglia");
+        d.add("properties", p);
         identify.add("d", d);
-        
-        webSocket.sendText(identify.toString(), true);
+        if (webSocket != null) webSocket.sendText(identify.toString(), true);
     }
 
     private void sendResume() {
-        LOGGER.info("[Reglia] Resuming session " + sessionId);
         JsonObject resume = new JsonObject();
         resume.addProperty("op", 6);
-        
         JsonObject d = new JsonObject();
         d.addProperty("token", Config.botToken);
         d.addProperty("session_id", sessionId);
         d.addProperty("seq", lastSequence);
         resume.add("d", d);
-        
-        webSocket.sendText(resume.toString(), true);
+        if (webSocket != null) webSocket.sendText(resume.toString(), true);
     }
 
     private void handleDispatch(JsonObject json) {
@@ -225,39 +198,62 @@ public class DiscordBot implements WebSocket.Listener {
 
         if ("READY".equals(t)) {
             sessionId = d.get("session_id").getAsString();
-            String username = d.getAsJsonObject("user").get("username").getAsString();
-            LOGGER.info("[Reglia] Ready! Session: " + sessionId + " | User: " + username);
+            String name = d.getAsJsonObject("user").get("username").getAsString();
+            LOGGER.info("[Reglia] Ready! User: " + name);
             isReconnecting = false;
+            if (server != null) server.execute(() -> broadcast("§a[Reglia] Connected as: " + name));
+        } else if ("RESUMED".equals(t)) {
+            LOGGER.info("[Reglia] Resumed.");
+            isReconnecting = false;
+        } else if ("MESSAGE_CREATE".equals(t)) {
+            handleMessageCreate(d);
+        }
+    }
 
-            if (server != null) {
-                server.execute(() -> broadcast("§a[Reglia] Connected as: " + username));
+    private void handleMessageCreate(JsonObject d) {
+        String content = d.has("content") ? d.get("content").getAsString() : "";
+        JsonObject authorObj = d.getAsJsonObject("author");
+        String author = authorObj.get("username").getAsString();
+        boolean isBot = authorObj.has("bot") && authorObj.get("bot").getAsBoolean();
+        String channelId = d.get("channel_id").getAsString();
+
+        if (isBot) return;
+        if (Config.hasChannelId() && !Config.channelId.equals(channelId)) return;
+
+        String gifUrl = findGif(d, content);
+        if (content.isEmpty() && gifUrl == null) return;
+
+        final String finalContent = content;
+        final String finalGif = gifUrl;
+
+        if (server != null) {
+            server.execute(() -> {
+                String msg = "§9[Discord] §f" + author + "§7: §f" + finalContent;
+                if (finalGif != null) msg += " §6[GIF Preview]";
+                broadcast(msg);
+            });
+        }
+    }
+
+    private String findGif(JsonObject d, String content) {
+        if (d.has("attachments")) {
+            for (com.google.gson.JsonElement a : d.getAsJsonArray("attachments")) {
+                JsonObject obj = a.getAsJsonObject();
+                String url = obj.get("url").getAsString();
+                String type = obj.has("content_type") ? obj.get("content_type").getAsString() : "";
+                if (type.equals("image/gif") || url.toLowerCase().endsWith(".gif")) return url;
             }
         }
-        else if ("RESUMED".equals(t)) {
-            LOGGER.info("[Reglia] Session Resumed Successfully!");
-            isReconnecting = false;
-        }
-        else if ("MESSAGE_CREATE".equals(t)) {
-            String content = d.has("content") ? d.get("content").getAsString() : "";
-            JsonObject authorObj = d.getAsJsonObject("author");
-            String author = authorObj.get("username").getAsString();
-            
-            boolean isBot = authorObj.has("bot") && authorObj.get("bot").getAsBoolean();
-            String channelId = d.get("channel_id").getAsString();
-
-            if (isBot) return;
-            if (Config.hasChannelId() && !Config.channelId.equals(channelId)) return;
-            if (content.isEmpty()) return;
-
-            LOGGER.info("[Discord->MC] " + author + ": " + content);
-
-            if (server != null) {
-                server.execute(() -> broadcast("§9[Discord] §f" + author + "§7: §f" + content));
+        if (content.contains("tenor.com") || content.contains("giphy.com")) {
+            for (String word : content.split("\\s+")) {
+                if (word.startsWith("http")) return word;
             }
         }
+        return null;
     }
     
     private void broadcast(String text) {
+        if (server == null) return;
         Component msg = Component.literal(text);
         for (ServerPlayer p : server.getPlayerList().getPlayers()) {
             p.sendSystemMessage(msg);
