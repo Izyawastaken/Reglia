@@ -1,34 +1,47 @@
-# This is an example mods.toml file. It contains the data relating to the loading mods.
-# There are several mandatory fields (#mandatory), and many more that are optional (#optional).
-# The overall format is standard TOML format, v0.5.0.
-# Note that there are a couple of TOML lists in this file.
+# Reglia - Discord Bridge Mod for Minecraft Forge 1.20.1
+# Two-way bridge: MC chat ↔ Discord channel
 
 modLoader = "javafml"
-loaderVersion = "${neo_version_range}"
+loaderVersion = "${loader_version_range}"
 license = "${mod_license}"
-issueTrackerURL = "https://github.com/YourUsername/reglia/issues"
+issueTrackerURL = "https://github.com/Izyawastaken/reglia/issues"
 
 [[mods]]
 modId = "${mod_id}"
 version = "${mod_version}"
 displayName = "${mod_name}"
 updateJSONURL = ""
-displayURL = "https://github.com/YourUsername/reglia"
+displayURL = "https://github.com/Izyawastaken/reglia"
 logoFile = "logo.png"
-credits = "Thanks to the NeoForge team!"
+credits = "Thanks to the Forge team!"
 authors = "${mod_authors}"
-description = '''${mod_description}'''
+description = '''Two-way Discord bridge for Minecraft servers.
+
+The bot runs INSIDE your server - no extra hosting needed!
+
+Commands:
+- /setwebhook <url> - Minecraft → Discord
+- /setbottoken <token> - Discord → Minecraft
+- /setchannel <id> - Set which Discord channel to listen to
+- /discord status - Check connection status
+- /discord reconnect - Reconnect the bot
+
+Features:
+- Chat messages with player avatars
+- Join/leave notifications
+- Death messages
+- Discord messages appear in-game'''
 
 [[dependencies.${mod_id}]]
-    modId = "neoforge"
-    type = "required"
-    versionRange = "${neo_version_range}"
+    modId = "forge"
+    mandatory = true
+    versionRange = "${forge_version_range}"
     ordering = "NONE"
     side = "BOTH"
 
 [[dependencies.${mod_id}]]
     modId = "minecraft"
-    type = "required"
+    mandatory = true
     versionRange = "${minecraft_version_range}"
     ordering = "NONE"
     side = "BOTH"

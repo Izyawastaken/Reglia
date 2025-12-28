@@ -1,36 +1,92 @@
 package com.example.reglia;
 
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.Mod;
-import net.neoforged.fml.event.config.ModConfigEvent;
-import net.neoforged.neoforge.common.ModConfigSpec;
+import net.minecraftforge.common.ForgeConfigSpec;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.fml.event.config.ModConfigEvent;
 
 /**
- * Configuration handler for Reglia mod.
- * Define all configurable options here.
+ * Configuration for Reglia Discord Bridge.
+ * Stores webhook URL and bot token for two-way communication.
  */
 @Mod.EventBusSubscriber(modid = Reglia.MOD_ID, bus = Mod.EventBusSubscriber.Bus.MOD)
 public class Config {
-    private static final ModConfigSpec.Builder BUILDER = new ModConfigSpec.Builder();
+    private static final ForgeConfigSpec.Builder BUILDER = new ForgeConfigSpec.Builder();
 
-    // Example configuration options
-    private static final ModConfigSpec.BooleanValue ENABLE_FEATURES = BUILDER
-            .comment("Enable or disable all Reglia features")
-            .define("enableFeatures", true);
+    // Discord webhook URL (for sending to Discord)
+    private static final ForgeConfigSpec.ConfigValue<String> WEBHOOK_URL = BUILDER
+            .comment("Discord webhook URL for sending chat messages TO Discord")
+            .define("webhookUrl", "");
 
-    private static final ModConfigSpec.IntValue EXAMPLE_VALUE = BUILDER
-            .comment("An example integer configuration value")
-            .defineInRange("exampleValue", 100, 0, 1000);
+    // Discord bot token (for receiving from Discord)
+    private static final ForgeConfigSpec.ConfigValue<String> BOT_TOKEN = BUILDER
+            .comment("Discord bot token for receiving messages FROM Discord")
+            .define("botToken", "");
 
-    static final ModConfigSpec SPEC = BUILDER.build();
+    // Discord channel ID to listen to
+    private static final ForgeConfigSpec.ConfigValue<String> CHANNEL_ID = BUILDER
+            .comment("Discord channel ID to listen for messages (the channel linked to Minecraft)")
+            .define("channelId", "");
 
-    // Runtime cached values
-    public static boolean enableFeatures;
-    public static int exampleValue;
+    // Whether the bridge is enabled
+    private static final ForgeConfigSpec.BooleanValue BRIDGE_ENABLED = BUILDER
+            .comment("Enable or disable the Discord bridge")
+            .define("bridgeEnabled", true);
+
+    // Include player deaths
+    private static final ForgeConfigSpec.BooleanValue SEND_DEATHS = BUILDER
+            .comment("Send player death messages to Discord")
+            .define("sendDeaths", true);
+
+    // Include join/leave messages
+    private static final ForgeConfigSpec.BooleanValue SEND_JOIN_LEAVE = BUILDER
+            .comment("Send player join/leave messages to Discord")
+            .define("sendJoinLeave", true);
+
+    static final ForgeConfigSpec SPEC = BUILDER.build();
+
+    // Runtime values
+    public static String webhookUrl = "";
+    public static String botToken = "";
+    public static String channelId = "";
+    public static boolean bridgeEnabled = true;
+    public static boolean sendDeaths = true;
+    public static boolean sendJoinLeave = true;
 
     @SubscribeEvent
     static void onLoad(final ModConfigEvent event) {
-        enableFeatures = ENABLE_FEATURES.get();
-        exampleValue = EXAMPLE_VALUE.get();
+        webhookUrl = WEBHOOK_URL.get();
+        botToken = BOT_TOKEN.get();
+        channelId = CHANNEL_ID.get();
+        bridgeEnabled = BRIDGE_ENABLED.get();
+        sendDeaths = SEND_DEATHS.get();
+        sendJoinLeave = SEND_JOIN_LEAVE.get();
+    }
+
+    public static void setWebhookUrl(String url) {
+        webhookUrl = url;
+        WEBHOOK_URL.set(url);
+    }
+
+    public static void setBotToken(String token) {
+        botToken = token;
+        BOT_TOKEN.set(token);
+    }
+
+    public static void setChannelId(String id) {
+        channelId = id;
+        CHANNEL_ID.set(id);
+    }
+
+    public static boolean hasWebhook() {
+        return webhookUrl != null && !webhookUrl.isEmpty();
+    }
+
+    public static boolean hasBotToken() {
+        return botToken != null && !botToken.isEmpty();
+    }
+
+    public static boolean hasChannelId() {
+        return channelId != null && !channelId.isEmpty();
     }
 }
