@@ -1,54 +1,72 @@
 package com.example.reglia;
 
 import com.mojang.logging.LogUtils;
-import net.minecraftforge.common.MinecraftForge;
-import net.minecraftforge.event.server.ServerStartingEvent;
-import net.minecraftforge.event.server.ServerStoppingEvent;
-import net.minecraftforge.eventbus.api.IEventBus;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.ModLoadingContext;
-import net.minecraftforge.fml.common.Mod;
-import net.minecraftforge.fml.config.ModConfig;
-import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
-import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.fml.ModContainer;
+import net.neoforged.fml.common.Mod;
+import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
+import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
+import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.event.RegisterCommandsEvent;
+import net.neoforged.neoforge.event.ServerChatEvent;
+import net.neoforged.neoforge.event.server.ServerStartingEvent;
+import net.neoforged.neoforge.event.server.ServerStoppingEvent;
 import org.slf4j.Logger;
 
 /**
- * Reglia - Two-way Discord Bridge Mod
+ * Reglia - Discord Bridge with GIF Previews for Minecraft
  */
 @Mod(Reglia.MOD_ID)
 public class Reglia {
     public static final String MOD_ID = "reglia";
-    private static final Logger LOGGER = LogUtils.getLogger();
+    public static final Logger LOGGER = LogUtils.getLogger();
 
-    public Reglia() {
-        IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
-        modEventBus.addListener(this::commonSetup);
+    public Reglia(IEventBus modEventBus, ModContainer modContainer) {
+        // Lifecycle events
+        modEventBus.addListener(this::onCommonSetup);
+        modEventBus.addListener(this::onClientSetup);
 
-        MinecraftForge.EVENT_BUS.register(this);
-        MinecraftForge.EVENT_BUS.register(new ChatListener());
+        // Server events
+        NeoForge.EVENT_BUS.addListener(this::onServerStarting);
+        NeoForge.EVENT_BUS.addListener(this::onServerStopping);
+        NeoForge.EVENT_BUS.addListener(this::onRegisterCommands);
+        NeoForge.EVENT_BUS.addListener(this::onServerChat);
 
-        ModLoadingContext.get().registerConfig(ModConfig.Type.SERVER, Config.SPEC);
-
-        LOGGER.info("Reglia Discord Bridge initialized!");
+        LOGGER.info("[Reglia] Initializing v3.0 for NeoForge 1.21.x");
     }
 
-    private void commonSetup(final FMLCommonSetupEvent event) {
-        LOGGER.info("Reglia ready!");
+    private void onCommonSetup(FMLCommonSetupEvent event) {
+        Config.load();
+        LOGGER.info("[Reglia] Configuration loaded");
     }
 
-    @SubscribeEvent
-    public void onServerStarting(ServerStartingEvent event) {
-        ModCommands.register(event.getServer().getCommands().getDispatcher());
+    private void onClientSetup(FMLClientSetupEvent event) {
+        LOGGER.info("[Reglia] Client setup complete");
+    }
+
+    private void onServerStarting(ServerStartingEvent event) {
+        LOGGER.info("[Reglia] Server starting, initializing Discord bot...");
         DiscordBot.start(event.getServer());
-        LOGGER.info("Reglia: Commands registered, Discord bot starting...");
     }
 
-    @SubscribeEvent
-    public void onServerStopping(ServerStoppingEvent event) {
+    private void onServerStopping(ServerStoppingEvent event) {
+        LOGGER.info("[Reglia] Server stopping, disconnecting Discord bot...");
         DiscordBot.stop();
-        if (Config.hasWebhook()) {
-            DiscordWebhook.sendMessage("🔴 Server stopped", "Server");
-        }
+    }
+
+    private void onRegisterCommands(RegisterCommandsEvent event) {
+        ModCommands.register(event.getDispatcher());
+        LOGGER.info("[Reglia] Commands registered");
+    }
+
+    /**
+     * Handle player chat and send to Discord
+     */
+    private void onServerChat(ServerChatEvent event) {
+        String playerName = event.getPlayer().getName().getString();
+        String message = event.getMessage().getString();
+
+        LOGGER.debug("[Reglia] Chat: {} -> {}", playerName, message);
+        DiscordWebhook.sendChatMessage(playerName, message);
     }
 }

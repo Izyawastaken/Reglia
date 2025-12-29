@@ -141,22 +141,52 @@ public class GifManager {
 
             ImageReader reader = readers.next();
             reader.setInput(iis);
-            int count = reader.getNumImages(true);
+
+            int count = 0;
+            try {
+                count = reader.getNumImages(true);
+            } catch (Exception e) {
+                // Fallback to reading until failure if count fails
+                LOGGER.warn("[Reglia] Failed to count images: " + e.getMessage());
+                count = 0;
+            }
+
             LOGGER.info("[Reglia] Found " + count + " frames in GIF");
 
-            for (int i = 0; i < count; i++) {
-                BufferedImage bimg = reader.read(i);
-                if (i == 0) {
-                    anim.width = bimg.getWidth();
-                    anim.height = bimg.getHeight();
-                }
-                DynamicTexture texture = new DynamicTexture(fromBufferedImage(bimg));
-                String texturePath = "reglia_gif_" + Math.abs(originalUrl.hashCode()) + "_" + i;
-                ResourceLocation loc = Minecraft.getInstance().getTextureManager().register(texturePath, texture);
+            if (count > 0) {
+                // Read first frame to get dimensions
+                BufferedImage first = reader.read(0);
+                anim.width = first.getWidth();
+                anim.height = first.getHeight();
 
-                anim.frames.add(loc);
-                anim.frameDelays.add(100);
-                anim.totalDuration += 100;
+                // Create a master canvas for compositing (handles "Do Not Dispose"
+                // optimization)
+                BufferedImage master = new BufferedImage(anim.width, anim.height, BufferedImage.TYPE_INT_ARGB);
+                java.awt.Graphics2D g2d = master.createGraphics();
+                g2d.setBackground(new java.awt.Color(0, 0, 0, 0)); // Transparent background
+
+                for (int i = 0; i < count; i++) {
+                    BufferedImage frame = reader.read(i);
+
+                    // Basic compositing: Draw new frame over previous state.
+                    // This fixes "holes" in optimized GIFs where transparent pixels are used for
+                    // unchanged areas.
+                    // Note: This assumes "Do Not Dispose" (Method 1), which is most common for
+                    // optimized GIFs.
+                    // If a GIF uses "Restore to Background" (Method 2), this might cause trails.
+                    // But trails are better than corruption/holes.
+                    g2d.drawImage(frame, 0, 0, null);
+
+                    // Create texture from the COMPOSITED master canvas
+                    DynamicTexture texture = new DynamicTexture(fromBufferedImage(master));
+                    String texturePath = "reglia_gif_" + Math.abs(originalUrl.hashCode()) + "_" + i;
+                    ResourceLocation loc = Minecraft.getInstance().getTextureManager().register(texturePath, texture);
+
+                    anim.frames.add(loc);
+                    anim.frameDelays.add(100); // Default delay (TODO: Read actual delay from metadata)
+                    anim.totalDuration += 100;
+                }
+                g2d.dispose();
             }
             anim.loading = false;
             LOGGER.info("[Reglia] GIF processing complete for " + originalUrl);
@@ -164,6 +194,69 @@ public class GifManager {
             LOGGER.error("[Reglia] Error processing GIF: " + originalUrl, e);
             anim.loading = false;
         }
+    }
+
+    // Tenor Public Key (LIVDSRZULELA is the standard public key for integrations)
+    private static final String TENOR_KEY = "LIVDSRZULELA";
+    private static final String TENOR_TRENDING = "https://g.tenor.com/v1/trending?key=" + TENOR_KEY + "&limit=20";
+    private static final String TENOR_SEARCH = "https://g.tenor.com/v1/search?key=" + TENOR_KEY + "&limit=20&q=";
+
+    public record GifEntry(String url, String previewUrl) {
+    }
+
+    public static CompletableFuture<List<GifEntry>> getTrending() {
+        return fetchTenor(TENOR_TRENDING);
+    }
+
+    public static CompletableFuture<List<GifEntry>> searchTenor(String query) {
+        String encoded = query.replace(" ", "%20");
+        return fetchTenor(TENOR_SEARCH + encoded);
+    }
+
+    private static CompletableFuture<List<GifEntry>> fetchTenor(String apiUrl) {
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                HttpRequest request = HttpRequest.newBuilder(URI.create(apiUrl))
+                        .header("User-Agent", "Mozilla/5.0 Reglia Mod")
+                        .build();
+                String json = HTTP_CLIENT.send(request, HttpResponse.BodyHandlers.ofString()).body();
+
+                List<GifEntry> results = new ArrayList<>();
+                try {
+                    com.google.gson.JsonObject root = new com.google.gson.Gson().fromJson(json,
+                            com.google.gson.JsonObject.class);
+                    if (root.has("results")) {
+                        com.google.gson.JsonArray arr = root.getAsJsonArray("results");
+                        for (com.google.gson.JsonElement el : arr) {
+                            try {
+                                com.google.gson.JsonObject obj = el.getAsJsonObject();
+                                if (obj.has("media")) {
+                                    com.google.gson.JsonArray mediaArr = obj.getAsJsonArray("media");
+                                    if (mediaArr.size() > 0) {
+                                        com.google.gson.JsonObject media = mediaArr.get(0).getAsJsonObject();
+                                        if (media.has("gif")) {
+                                            com.google.gson.JsonObject gif = media.getAsJsonObject("gif");
+                                            if (gif.has("url")) {
+                                                String url = gif.get("url").getAsString();
+                                                results.add(new GifEntry(url, url));
+                                            }
+                                        }
+                                    }
+                                }
+                            } catch (Exception e) {
+                                // Skip malformed entry
+                            }
+                        }
+                    }
+                } catch (Exception e) {
+                    LOGGER.error("[Reglia] Failed to parse Tenor JSON", e);
+                }
+                return results;
+            } catch (Exception e) {
+                LOGGER.error("[Reglia] Tenor API failed", e);
+                return Collections.emptyList();
+            }
+        });
     }
 
     private static NativeImage fromBufferedImage(BufferedImage bimg) {

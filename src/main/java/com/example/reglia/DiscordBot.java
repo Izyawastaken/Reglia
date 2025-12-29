@@ -1,9 +1,8 @@
 package com.example.reglia;
 
-import com.google.gson.Gson;
-import com.google.gson.JsonObject;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.mojang.logging.LogUtils;
 import net.minecraft.network.chat.Component;
@@ -22,6 +21,11 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+/**
+ * Native Java WebSocket Discord Gateway client.
+ * Connects to Discord and relays messages to Minecraft.
+ * No external Discord libraries required.
+ */
 public class DiscordBot implements WebSocket.Listener {
     private static final Logger LOGGER = LogUtils.getLogger();
     private static final String GATEWAY_URL = "wss://gateway.discord.gg/?v=10&encoding=json";
@@ -32,7 +36,7 @@ public class DiscordBot implements WebSocket.Listener {
     private final HttpClient client;
     private WebSocket webSocket;
     private ScheduledExecutorService scheduler;
-    
+
     private String sessionId;
     private Integer lastSequence = null;
     private boolean isReconnecting = false;
@@ -47,10 +51,11 @@ public class DiscordBot implements WebSocket.Listener {
     public static void start(MinecraftServer mcServer) {
         server = mcServer;
         if (!Config.hasBotToken()) {
-            LOGGER.info("[Reglia] No bot token found.");
+            LOGGER.info("[Reglia] No bot token configured - Discord bot disabled");
             return;
         }
-        if (instance != null) instance.shutdown();
+        if (instance != null)
+            instance.shutdown();
         instance = new DiscordBot();
         instance.connect();
     }
@@ -61,10 +66,11 @@ public class DiscordBot implements WebSocket.Listener {
             instance = null;
         }
     }
-    
+
     public static void restart() {
         stop();
-        if (server != null) start(server);
+        if (server != null)
+            start(server);
     }
 
     public static boolean isConnected() {
@@ -73,10 +79,10 @@ public class DiscordBot implements WebSocket.Listener {
 
     private void connect() {
         try {
-            LOGGER.info("[Reglia] Connecting to Gateway...");
+            LOGGER.info("[Reglia] Connecting to Discord Gateway...");
             client.newWebSocketBuilder().buildAsync(URI.create(GATEWAY_URL), this);
         } catch (Exception e) {
-            LOGGER.error("[Reglia] Connection failed: " + e.getMessage());
+            LOGGER.error("[Reglia] Connection failed: {}", e.getMessage());
             scheduleReconnect();
         }
     }
@@ -84,7 +90,10 @@ public class DiscordBot implements WebSocket.Listener {
     private void shutdown() {
         isConnected.set(false);
         if (webSocket != null) {
-            webSocket.sendClose(WebSocket.NORMAL_CLOSURE, "Shutdown");
+            try {
+                webSocket.sendClose(WebSocket.NORMAL_CLOSURE, "Shutdown");
+            } catch (Exception ignored) {
+            }
             webSocket = null;
         }
         if (scheduler != null && !scheduler.isShutdown()) {
@@ -93,7 +102,8 @@ public class DiscordBot implements WebSocket.Listener {
     }
 
     private void scheduleReconnect() {
-        if (scheduler == null || scheduler.isShutdown()) return;
+        if (scheduler == null || scheduler.isShutdown())
+            return;
         scheduler.schedule(() -> {
             isReconnecting = true;
             connect();
@@ -104,7 +114,7 @@ public class DiscordBot implements WebSocket.Listener {
     public void onOpen(WebSocket webSocket) {
         this.webSocket = webSocket;
         this.isConnected.set(true);
-        LOGGER.info("[Reglia] WebSocket Connected!");
+        LOGGER.info("[Reglia] WebSocket connected!");
         webSocket.request(1);
     }
 
@@ -112,11 +122,12 @@ public class DiscordBot implements WebSocket.Listener {
     public CompletionStage<?> onText(WebSocket webSocket, CharSequence data, boolean last) {
         messageBuffer.append(data);
         if (last) {
-            String fullMessage = messageBuffer.toString();
+            String msg = messageBuffer.toString();
             messageBuffer.setLength(0);
             try {
-                JsonObject json = JsonParser.parseString(fullMessage).getAsJsonObject();
+                JsonObject json = JsonParser.parseString(msg).getAsJsonObject();
                 int op = json.get("op").getAsInt();
+
                 if (json.has("s") && !json.get("s").isJsonNull()) {
                     lastSequence = json.get("s").getAsInt();
                 }
@@ -125,55 +136,58 @@ public class DiscordBot implements WebSocket.Listener {
                     case 10 -> handleHello(json);
                     case 0 -> handleDispatch(json);
                     case 7 -> {
-                        LOGGER.info("[Reglia] Reconnect requested.");
+                        LOGGER.info("[Reglia] Reconnect requested");
                         webSocket.sendClose(WebSocket.NORMAL_CLOSURE, "Reconnect");
                     }
                     case 9 -> {
-                        LOGGER.warn("[Reglia] Invalid Session.");
+                        LOGGER.warn("[Reglia] Invalid session");
                         sessionId = null;
                         lastSequence = null;
                         sendIdentify();
                     }
                 }
             } catch (Exception e) {
-                LOGGER.error("[Reglia] Error Parsing: " + e.getMessage());
+                LOGGER.error("[Reglia] Parse error: {}", e.getMessage());
             }
         }
         webSocket.request(1);
         return null;
     }
-    
+
     @Override
     public void onError(WebSocket webSocket, Throwable error) {
-        LOGGER.error("[Reglia] Socket Error: " + error.getMessage());
+        LOGGER.error("[Reglia] WebSocket error: {}", error.getMessage());
         isConnected.set(false);
     }
-    
+
     @Override
-    public CompletionStage<?> onClose(WebSocket webSocket, int statusCode, String reason) {
-        LOGGER.info("[Reglia] Closed: " + statusCode);
+    public CompletionStage<?> onClose(WebSocket webSocket, int code, String reason) {
+        LOGGER.info("[Reglia] WebSocket closed: {} - {}", code, reason);
         isConnected.set(false);
-        if (statusCode != 1000 && statusCode != 4004) scheduleReconnect();
+        if (code != 1000 && code != 4004)
+            scheduleReconnect();
         return null;
     }
 
     private void handleHello(JsonObject json) {
         int interval = json.getAsJsonObject("d").get("heartbeat_interval").getAsInt();
         scheduler.scheduleAtFixedRate(() -> {
-            try {
-                if (this.webSocket != null) {
-                    JsonObject heartbeat = new JsonObject();
-                    heartbeat.addProperty("op", 1);
-                    heartbeat.addProperty("d", lastSequence);
-                    this.webSocket.sendText(heartbeat.toString(), true);
+            if (this.webSocket != null) {
+                try {
+                    JsonObject hb = new JsonObject();
+                    hb.addProperty("op", 1);
+                    hb.addProperty("d", lastSequence);
+                    this.webSocket.sendText(hb.toString(), true);
+                } catch (Exception e) {
+                    LOGGER.error("[Reglia] Heartbeat error: {}", e.getMessage());
                 }
-            } catch (Exception e) {
-                LOGGER.error("Heartbeat error: " + e.getMessage());
             }
         }, 0, interval, TimeUnit.MILLISECONDS);
 
-        if (sessionId != null && isReconnecting) sendResume();
-        else sendIdentify();
+        if (sessionId != null && isReconnecting)
+            sendResume();
+        else
+            sendIdentify();
     }
 
     private void sendIdentify() {
@@ -181,14 +195,15 @@ public class DiscordBot implements WebSocket.Listener {
         identify.addProperty("op", 2);
         JsonObject d = new JsonObject();
         d.addProperty("token", Config.botToken);
-        d.addProperty("intents", 33280);
+        d.addProperty("intents", 33280); // MESSAGE_CONTENT + GUILD_MESSAGES
         JsonObject p = new JsonObject();
-        p.addProperty("os", "linux");
+        p.addProperty("os", "minecraft");
         p.addProperty("browser", "Reglia");
         p.addProperty("device", "Reglia");
         d.add("properties", p);
         identify.add("d", d);
-        if (webSocket != null) webSocket.sendText(identify.toString(), true);
+        if (webSocket != null)
+            webSocket.sendText(identify.toString(), true);
     }
 
     private void sendResume() {
@@ -199,39 +214,47 @@ public class DiscordBot implements WebSocket.Listener {
         d.addProperty("session_id", sessionId);
         d.addProperty("seq", lastSequence);
         resume.add("d", d);
-        if (webSocket != null) webSocket.sendText(resume.toString(), true);
+        if (webSocket != null)
+            webSocket.sendText(resume.toString(), true);
     }
 
     private void handleDispatch(JsonObject json) {
         String t = json.has("t") && !json.get("t").isJsonNull() ? json.get("t").getAsString() : "";
         JsonObject d = json.getAsJsonObject("d");
 
-        if ("READY".equals(t)) {
-            sessionId = d.get("session_id").getAsString();
-            String name = d.getAsJsonObject("user").get("username").getAsString();
-            LOGGER.info("[Reglia] Ready! User: " + name);
-            isReconnecting = false;
-            if (server != null) server.execute(() -> broadcast("§a[Reglia] Connected as: " + name));
-        } else if ("RESUMED".equals(t)) {
-            LOGGER.info("[Reglia] Resumed.");
-            isReconnecting = false;
-        } else if ("MESSAGE_CREATE".equals(t)) {
-            handleMessageCreate(d);
+        switch (t) {
+            case "READY" -> {
+                sessionId = d.get("session_id").getAsString();
+                String name = d.getAsJsonObject("user").get("username").getAsString();
+                LOGGER.info("[Reglia] Connected as: {}", name);
+                isReconnecting = false;
+                if (server != null) {
+                    server.execute(() -> broadcast("§a[Reglia] Discord bot connected as: " + name));
+                }
+            }
+            case "RESUMED" -> {
+                LOGGER.info("[Reglia] Session resumed");
+                isReconnecting = false;
+            }
+            case "MESSAGE_CREATE" -> handleMessageCreate(d);
         }
     }
 
     private void handleMessageCreate(JsonObject d) {
         String content = d.has("content") ? d.get("content").getAsString() : "";
-        JsonObject authorObj = d.getAsJsonObject("author");
-        String author = authorObj.get("username").getAsString();
-        boolean isBot = authorObj.has("bot") && authorObj.get("bot").getAsBoolean();
+        JsonObject author = d.getAsJsonObject("author");
+        String username = author.get("username").getAsString();
+        boolean isBot = author.has("bot") && author.get("bot").getAsBoolean();
         String channelId = d.get("channel_id").getAsString();
 
-        if (isBot) return;
-        if (Config.hasChannelId() && !Config.channelId.equals(channelId)) return;
+        if (isBot)
+            return;
+        if (Config.hasChannelId() && !Config.channelId.equals(channelId))
+            return;
 
         List<String> gifUrls = findAllGifs(d, content);
-        if (content.isEmpty() && gifUrls.isEmpty()) return;
+        if (content.isEmpty() && gifUrls.isEmpty())
+            return;
 
         final String finalContent = content;
         final List<String> finalGifs = gifUrls;
@@ -239,17 +262,15 @@ public class DiscordBot implements WebSocket.Listener {
         if (server != null) {
             server.execute(() -> {
                 String msgText = finalContent;
-                // Remove GIF links from text to avoid clutter
                 for (String gif : finalGifs) {
-                    if (msgText.contains(gif)) {
-                        msgText = msgText.replace(gif, "").trim();
-                    }
+                    msgText = msgText.replace(gif, "").trim();
                 }
 
-                String msg = "§9[Discord] §f" + author + "§7: §f" + msgText;
+                String msg = "§9[Discord] §f" + username + "§7: §f" + msgText;
                 for (String gif : finalGifs) {
-                    // Reserve 4 lines of space for each GIF
-                    msg += "§r\n \n \n \n§6[GIF:" + gif + "]";
+                    // Register URL to get a short ID, preventing chat wrap issues
+                    int id = GifRegistry.register(gif);
+                    msg += "§r\n \n \n \n§6[GIF:ID:" + id + "]";
                 }
                 broadcast(msg);
             });
@@ -258,8 +279,8 @@ public class DiscordBot implements WebSocket.Listener {
 
     private List<String> findAllGifs(JsonObject d, String content) {
         List<String> gifs = new ArrayList<>();
-        
-        // Check Attachments
+
+        // Check attachments
         if (d.has("attachments")) {
             for (JsonElement a : d.getAsJsonArray("attachments")) {
                 JsonObject obj = a.getAsJsonObject();
@@ -267,47 +288,52 @@ public class DiscordBot implements WebSocket.Listener {
                     String url = obj.get("url").getAsString();
                     String type = obj.has("content_type") ? obj.get("content_type").getAsString() : "";
                     if (type.equals("image/gif") || url.toLowerCase().endsWith(".gif")) {
-                        if (!gifs.contains(url)) gifs.add(url);
+                        if (!gifs.contains(url))
+                            gifs.add(url);
                     }
                 }
             }
         }
-        
-        // Check Embeds (Discord often puts GIF links here)
+
+        // Check embeds
         if (d.has("embeds")) {
             for (JsonElement e : d.getAsJsonArray("embeds")) {
                 JsonObject embed = e.getAsJsonObject();
                 if (embed.has("url")) {
                     String url = embed.get("url").getAsString();
                     if (url.contains("tenor.com") || url.contains("giphy.com") || url.toLowerCase().endsWith(".gif")) {
-                        if (!gifs.contains(url)) gifs.add(url);
+                        if (!gifs.contains(url))
+                            gifs.add(url);
                     }
                 }
                 if (embed.has("thumbnail")) {
-                   String thumb = embed.getAsJsonObject("thumbnail").get("url").getAsString();
-                   if (thumb.toLowerCase().endsWith(".gif")) {
-                        if (!gifs.contains(thumb)) gifs.add(thumb);
-                   }
-                }
-            }
-        }
-        
-        // Check Content for links
-        if (content.contains("http")) {
-            for (String word : content.split("\\s+")) {
-                if (word.startsWith("http")) {
-                    if (word.contains("tenor.com") || word.contains("giphy.com") || word.toLowerCase().endsWith(".gif")) {
-                         if (!gifs.contains(word)) gifs.add(word);
+                    String thumb = embed.getAsJsonObject("thumbnail").get("url").getAsString();
+                    if (thumb.toLowerCase().endsWith(".gif") && !gifs.contains(thumb)) {
+                        gifs.add(thumb);
                     }
                 }
             }
         }
-        
+
+        // Check content for links
+        if (content.contains("http")) {
+            for (String word : content.split("\\s+")) {
+                if (word.startsWith("http")) {
+                    if (word.contains("tenor.com") || word.contains("giphy.com")
+                            || word.toLowerCase().endsWith(".gif")) {
+                        if (!gifs.contains(word))
+                            gifs.add(word);
+                    }
+                }
+            }
+        }
+
         return gifs;
     }
-    
+
     private void broadcast(String text) {
-        if (server == null) return;
+        if (server == null)
+            return;
         Component msg = Component.literal(text);
         for (ServerPlayer p : server.getPlayerList().getPlayers()) {
             p.sendSystemMessage(msg);
