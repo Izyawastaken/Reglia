@@ -108,7 +108,6 @@ public class GifManager {
                                 DynamicTexture texture = new DynamicTexture(texturePath, processedFrames.get(i));
                                 Minecraft.getInstance().getTextureManager().register(texturePath, texture);
                                 anim.frames.add(texturePath);
-                                anim.frames.add(loc);
                                 anim.frameDelays.add(100);
                                 anim.totalDuration += 100;
                             }
