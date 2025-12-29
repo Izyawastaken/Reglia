@@ -32,6 +32,9 @@ public class GifManager {
     private static final Pattern OG_IMAGE_PATTERN = Pattern.compile("<meta property=\"og:image\" content=\"([^\"]+)\"");
     private static final Pattern TENOR_DIRECT_PATTERN = Pattern.compile("\"contentUrl\":\\s*\"([^\"]+\\.gif)\"");
 
+    // Limit concurrent downloads to prevent lag
+    private static final java.util.concurrent.Semaphore DOWNLOAD_LIMITER = new java.util.concurrent.Semaphore(3);
+
     public static class GifAnimation {
         public List<ResourceLocation> frames = new ArrayList<>();
         public List<Integer> frameDelays = new ArrayList<>();
@@ -72,23 +75,29 @@ public class GifManager {
     private static void downloadAndProcess(String url, GifAnimation anim) {
         CompletableFuture.runAsync(() -> {
             try {
-                LOGGER.info("[Reglia] Resolving GIF URL: " + url);
-                String resolvedUrl = resolveUrl(url);
-                LOGGER.info("[Reglia] Downloading from: " + resolvedUrl);
+                // Limit concurrent downloads to prevent lag
+                DOWNLOAD_LIMITER.acquire();
+                try {
+                    LOGGER.info("[Reglia] Resolving GIF URL: " + url);
+                    String resolvedUrl = resolveUrl(url);
+                    LOGGER.info("[Reglia] Downloading from: " + resolvedUrl);
 
-                HttpRequest request = HttpRequest.newBuilder(URI.create(resolvedUrl))
-                        .header("User-Agent", "Mozilla/5.0 Reglia Mod")
-                        .build();
+                    HttpRequest request = HttpRequest.newBuilder(URI.create(resolvedUrl))
+                            .header("User-Agent", "Mozilla/5.0 Reglia Mod")
+                            .build();
 
-                HttpResponse<byte[]> response = HTTP_CLIENT.send(request, HttpResponse.BodyHandlers.ofByteArray());
-                byte[] data = response.body();
+                    HttpResponse<byte[]> response = HTTP_CLIENT.send(request, HttpResponse.BodyHandlers.ofByteArray());
+                    byte[] data = response.body();
 
-                if (data == null || data.length < 10) {
-                    throw new Exception("Empty or invalid data received");
+                    if (data == null || data.length < 10) {
+                        throw new Exception("Empty or invalid data received");
+                    }
+
+                    LOGGER.info("[Reglia] Downloaded " + data.length + " bytes. Processing...");
+                    Minecraft.getInstance().execute(() -> processGif(url, data, anim));
+                } finally {
+                    DOWNLOAD_LIMITER.release();
                 }
-
-                LOGGER.info("[Reglia] Downloaded " + data.length + " bytes. Processing...");
-                Minecraft.getInstance().execute(() -> processGif(url, data, anim));
             } catch (Exception e) {
                 LOGGER.error("[Reglia] Failed to download GIF: " + url, e);
                 anim.loading = false;
@@ -146,7 +155,6 @@ public class GifManager {
             try {
                 count = reader.getNumImages(true);
             } catch (Exception e) {
-                // Fallback to reading until failure if count fails
                 LOGGER.warn("[Reglia] Failed to count images: " + e.getMessage());
                 count = 0;
             }
@@ -159,32 +167,60 @@ public class GifManager {
                 anim.width = first.getWidth();
                 anim.height = first.getHeight();
 
-                // Create a master canvas for compositing (handles "Do Not Dispose"
-                // optimization)
+                // Create master canvas for compositing
                 BufferedImage master = new BufferedImage(anim.width, anim.height, BufferedImage.TYPE_INT_ARGB);
                 java.awt.Graphics2D g2d = master.createGraphics();
-                g2d.setBackground(new java.awt.Color(0, 0, 0, 0)); // Transparent background
+                g2d.setBackground(new java.awt.Color(0, 0, 0, 0));
 
                 for (int i = 0; i < count; i++) {
                     BufferedImage frame = reader.read(i);
 
-                    // Basic compositing: Draw new frame over previous state.
-                    // This fixes "holes" in optimized GIFs where transparent pixels are used for
-                    // unchanged areas.
-                    // Note: This assumes "Do Not Dispose" (Method 1), which is most common for
-                    // optimized GIFs.
-                    // If a GIF uses "Restore to Background" (Method 2), this might cause trails.
-                    // But trails are better than corruption/holes.
-                    g2d.drawImage(frame, 0, 0, null);
+                    // Get frame metadata for position and disposal
+                    int frameX = 0, frameY = 0;
+                    String disposal = "none";
+                    try {
+                        javax.imageio.metadata.IIOMetadata meta = reader.getImageMetadata(i);
+                        org.w3c.dom.Node root = meta.getAsTree("javax_imageio_gif_image_1.0");
+                        org.w3c.dom.NodeList children = root.getChildNodes();
+                        for (int c = 0; c < children.getLength(); c++) {
+                            org.w3c.dom.Node node = children.item(c);
+                            if ("ImageDescriptor".equals(node.getNodeName())) {
+                                org.w3c.dom.NamedNodeMap attrs = node.getAttributes();
+                                if (attrs.getNamedItem("imageLeftPosition") != null)
+                                    frameX = Integer.parseInt(attrs.getNamedItem("imageLeftPosition").getNodeValue());
+                                if (attrs.getNamedItem("imageTopPosition") != null)
+                                    frameY = Integer.parseInt(attrs.getNamedItem("imageTopPosition").getNodeValue());
+                            }
+                            if ("GraphicControlExtension".equals(node.getNodeName())) {
+                                org.w3c.dom.NamedNodeMap attrs = node.getAttributes();
+                                if (attrs.getNamedItem("disposalMethod") != null)
+                                    disposal = attrs.getNamedItem("disposalMethod").getNodeValue();
+                            }
+                        }
+                    } catch (Exception ignored) {
+                    }
 
-                    // Create texture from the COMPOSITED master canvas
+                    // Handle disposal BEFORE drawing this frame
+                    if ("restoreToBackgroundColor".equals(disposal)) {
+                        g2d.clearRect(frameX, frameY, frame.getWidth(), frame.getHeight());
+                    }
+
+                    // Draw frame at correct position
+                    g2d.drawImage(frame, frameX, frameY, null);
+
+                    // Create texture from composited master
                     DynamicTexture texture = new DynamicTexture(fromBufferedImage(master));
                     String texturePath = "reglia_gif_" + Math.abs(originalUrl.hashCode()) + "_" + i;
                     ResourceLocation loc = Minecraft.getInstance().getTextureManager().register(texturePath, texture);
 
                     anim.frames.add(loc);
-                    anim.frameDelays.add(100); // Default delay (TODO: Read actual delay from metadata)
+                    anim.frameDelays.add(100);
                     anim.totalDuration += 100;
+
+                    // Handle disposal AFTER capturing (for next frame)
+                    if ("restoreToBackgroundColor".equals(disposal)) {
+                        g2d.clearRect(frameX, frameY, frame.getWidth(), frame.getHeight());
+                    }
                 }
                 g2d.dispose();
             }
