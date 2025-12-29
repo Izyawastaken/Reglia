@@ -96,25 +96,37 @@ public class GuiGraphicsMixin {
         if (frame != null) {
             cir.setReturnValue(x);
 
-            GifManager.GifAnimation anim = GifManager.getAnimation(url);
+            // Use original GIF dimensions, capped to prevent huge GIFs
+            // Balanced for visibility in mini-chat HUD
+            int maxHeight = 90; // Max height in pixels
+            int maxWidth = 250; // Max width in pixels
 
-            // Height of ~3 lines (Current line + 2 newlines reserved)
-            int displayHeight = 25;
-            int displayWidth = displayHeight;
-
+            int displayWidth = 48;
+            int displayHeight = 48;
             int texWidth = 64;
             int texHeight = 64;
 
+            GifManager.GifAnimation anim = GifManager.getAnimation(url);
+
             if (anim != null && anim.width > 0 && anim.height > 0) {
-                float aspect = (float) anim.width / anim.height;
-                displayWidth = (int) (displayHeight * aspect);
+                // Start with original dimensions
+                displayWidth = anim.width;
+                displayHeight = anim.height;
                 texWidth = anim.width;
                 texHeight = anim.height;
 
-                // Cap width
-                if (displayWidth > 200) {
-                    displayWidth = 200;
-                    displayHeight = (int) (displayWidth / aspect);
+                // Scale down if too tall
+                if (displayHeight > maxHeight) {
+                    float scale = (float) maxHeight / displayHeight;
+                    displayHeight = maxHeight;
+                    displayWidth = (int) (displayWidth * scale);
+                }
+
+                // Scale down if still too wide
+                if (displayWidth > maxWidth) {
+                    float scale = (float) maxWidth / displayWidth;
+                    displayWidth = maxWidth;
+                    displayHeight = (int) (displayHeight * scale);
                 }
             }
 

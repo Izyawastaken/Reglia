@@ -30,19 +30,27 @@ public class ClientSetup {
     @SubscribeEvent
     public static void onClientChatReceived(net.neoforged.neoforge.client.event.ClientChatReceivedEvent event) {
         String msg = event.getMessage().getString();
-        // Regex to find [GIF:http...]
-        java.util.regex.Pattern p = java.util.regex.Pattern.compile("\\[GIF:(http[^\\]]+)\\]");
+
+        // Match both [GIF:url] and [GIF:url:H<height>] formats
+        // Use non-greedy match for URL to handle the optional :H suffix
+        java.util.regex.Pattern p = java.util.regex.Pattern.compile("\\[GIF:(https?://[^\\]]+?)(?::H(\\d+))?\\]");
         java.util.regex.Matcher m = p.matcher(msg);
 
         if (m.find()) {
             String url = m.group(1);
+            String heightHint = m.group(2);
             int id = GifRegistry.register(url);
 
-            // Replace the full URL tag with the Short ID tag for local rendering.
-            // 1. Prepend \n to separate the GIF from the <Username>, so the username
-            // renders on the line above.
-            // 2. Append \n\n to reserve vertical space for the GIF itself.
-            String newText = msg.replace(m.group(0), "\n[GIF:ID:" + id + "]\n\n");
+            // Calculate newlines based on height hint, or default to max
+            int height = 90; // Default max for mini-chat visibility
+            if (heightHint != null) {
+                height = Integer.parseInt(heightHint);
+            }
+            int lines = (int) Math.ceil(height / 9.0);
+            String spacing = "\n".repeat(lines);
+
+            // Replace with short ID and exact spacing
+            String newText = msg.replace(m.group(0), "\n[GIF:ID:" + id + "]" + spacing);
             event.setMessage(net.minecraft.network.chat.Component.literal(newText));
         }
     }

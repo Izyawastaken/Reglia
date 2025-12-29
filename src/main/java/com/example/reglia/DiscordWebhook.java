@@ -50,9 +50,11 @@ public class DiscordWebhook {
         CompletableFuture.runAsync(() -> {
             try {
                 String content = message;
-                // Strip [GIF:...] tag for clean Discord links
-                if (content.startsWith("[GIF:") && content.endsWith("]")) {
-                    content = content.substring(5, content.length() - 1);
+                // Strip [GIF:url] or [GIF:url:H<height>] tag for clean Discord links
+                java.util.regex.Pattern p = java.util.regex.Pattern.compile("\\[GIF:(https?://[^\\]]+?)(?::H\\d+)?\\]");
+                java.util.regex.Matcher m = p.matcher(content);
+                if (m.find()) {
+                    content = m.group(1); // Just the URL
                 }
 
                 sendPost(Config.webhookUrl, content, playerName, avatarUrl);

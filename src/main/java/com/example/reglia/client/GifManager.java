@@ -93,8 +93,29 @@ public class GifManager {
                         throw new Exception("Empty or invalid data received");
                     }
 
-                    LOGGER.info("[Reglia] Downloaded " + data.length + " bytes. Processing...");
-                    Minecraft.getInstance().execute(() -> processGif(url, data, anim));
+                    LOGGER.info("[Reglia] Downloaded " + data.length + " bytes. Processing OFF render thread...");
+
+                    // Process frames on THIS async thread (not render thread!)
+                    List<NativeImage> processedFrames = processGifFrames(url, data, anim);
+
+                    // Only register textures on render thread (lightweight)
+                    if (!processedFrames.isEmpty()) {
+                        Minecraft.getInstance().execute(() -> {
+                            for (int i = 0; i < processedFrames.size(); i++) {
+                                DynamicTexture texture = new DynamicTexture(processedFrames.get(i));
+                                String texturePath = "reglia_gif_" + Math.abs(url.hashCode()) + "_" + i;
+                                ResourceLocation loc = Minecraft.getInstance().getTextureManager().register(texturePath,
+                                        texture);
+                                anim.frames.add(loc);
+                                anim.frameDelays.add(100);
+                                anim.totalDuration += 100;
+                            }
+                            anim.loading = false;
+                            LOGGER.info("[Reglia] Registered " + processedFrames.size() + " textures for " + url);
+                        });
+                    } else {
+                        anim.loading = false;
+                    }
                 } finally {
                     DOWNLOAD_LIMITER.release();
                 }
@@ -138,14 +159,14 @@ public class GifManager {
                 .replace("\\/", "/");
     }
 
-    private static void processGif(String originalUrl, byte[] data, GifAnimation anim) {
+    private static List<NativeImage> processGifFrames(String originalUrl, byte[] data, GifAnimation anim) {
+        List<NativeImage> frames = new ArrayList<>();
         try (InputStream is = new ByteArrayInputStream(data);
                 ImageInputStream iis = ImageIO.createImageInputStream(is)) {
             Iterator<ImageReader> readers = ImageIO.getImageReadersByFormatName("gif");
             if (!readers.hasNext()) {
                 LOGGER.error("[Reglia] No GIF reader found for data of size " + data.length);
-                anim.loading = false;
-                return;
+                return frames;
             }
 
             ImageReader reader = readers.next();
@@ -161,6 +182,14 @@ public class GifManager {
 
             LOGGER.info("[Reglia] Found " + count + " frames in GIF");
 
+            // Now that processing is off render thread, we can handle more frames!
+            int maxFrames = 120; // Increased from 60 for smoother playback
+            int frameStep = 1;
+            if (count > maxFrames) {
+                frameStep = (int) Math.ceil((double) count / maxFrames);
+                LOGGER.info("[Reglia] Downsampling from " + count + " to ~" + (count / frameStep) + " frames");
+            }
+
             if (count > 0) {
                 // Read first frame to get dimensions
                 BufferedImage first = reader.read(0);
@@ -172,7 +201,7 @@ public class GifManager {
                 java.awt.Graphics2D g2d = master.createGraphics();
                 g2d.setBackground(new java.awt.Color(0, 0, 0, 0));
 
-                for (int i = 0; i < count; i++) {
+                for (int i = 0; i < count; i += frameStep) {
                     BufferedImage frame = reader.read(i);
 
                     // Get frame metadata for position and disposal
@@ -208,14 +237,8 @@ public class GifManager {
                     // Draw frame at correct position
                     g2d.drawImage(frame, frameX, frameY, null);
 
-                    // Create texture from composited master
-                    DynamicTexture texture = new DynamicTexture(fromBufferedImage(master));
-                    String texturePath = "reglia_gif_" + Math.abs(originalUrl.hashCode()) + "_" + i;
-                    ResourceLocation loc = Minecraft.getInstance().getTextureManager().register(texturePath, texture);
-
-                    anim.frames.add(loc);
-                    anim.frameDelays.add(100);
-                    anim.totalDuration += 100;
+                    // Convert to NativeImage (still on async thread - this is the heavy part)
+                    frames.add(fromBufferedImage(master));
 
                     // Handle disposal AFTER capturing (for next frame)
                     if ("restoreToBackgroundColor".equals(disposal)) {
@@ -224,12 +247,11 @@ public class GifManager {
                 }
                 g2d.dispose();
             }
-            anim.loading = false;
-            LOGGER.info("[Reglia] GIF processing complete for " + originalUrl);
+            LOGGER.info("[Reglia] Processed " + frames.size() + " frames for " + originalUrl);
         } catch (Exception e) {
             LOGGER.error("[Reglia] Error processing GIF: " + originalUrl, e);
-            anim.loading = false;
         }
+        return frames;
     }
 
     // Tenor Public Key (LIVDSRZULELA is the standard public key for integrations)
@@ -296,18 +318,25 @@ public class GifManager {
     }
 
     private static NativeImage fromBufferedImage(BufferedImage bimg) {
-        NativeImage nimg = new NativeImage(bimg.getWidth(), bimg.getHeight(), true);
-        for (int y = 0; y < bimg.getHeight(); y++) {
-            for (int x = 0; x < bimg.getWidth(); x++) {
-                int argb = bimg.getRGB(x, y);
-                // Convert ARGB to ABGR (NativeImage format)
-                int a = (argb >> 24) & 0xFF;
-                int r = (argb >> 16) & 0xFF;
-                int g = (argb >> 8) & 0xFF;
-                int b = argb & 0xFF;
-                int abgr = (a << 24) | (b << 16) | (g << 8) | r;
-                nimg.setPixelRGBA(x, y, abgr);
-            }
+        int w = bimg.getWidth();
+        int h = bimg.getHeight();
+        NativeImage nimg = new NativeImage(w, h, true);
+
+        // Bulk read all pixels at once (much faster than per-pixel getRGB)
+        int[] pixels = bimg.getRGB(0, 0, w, h, null, 0, w);
+
+        // Convert ARGB to ABGR in place and write
+        for (int i = 0; i < pixels.length; i++) {
+            int argb = pixels[i];
+            int a = (argb >> 24) & 0xFF;
+            int r = (argb >> 16) & 0xFF;
+            int g = (argb >> 8) & 0xFF;
+            int b = argb & 0xFF;
+            int abgr = (a << 24) | (b << 16) | (g << 8) | r;
+
+            int x = i % w;
+            int y = i / w;
+            nimg.setPixelRGBA(x, y, abgr);
         }
         return nimg;
     }

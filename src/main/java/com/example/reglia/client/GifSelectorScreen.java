@@ -144,9 +144,20 @@ public class GifSelectorScreen extends Screen {
 
     private void sendGif(String url) {
         if (this.minecraft != null && this.minecraft.player != null) {
-            // Send full URL so server/Discord bridge receives the link.
-            // Client-side wrapping protection will be handled by ClientChatReceivedEvent.
-            String msg = "[GIF:" + url + "]";
+            // Get dimensions from already-cached GIF
+            GifManager.GifAnimation anim = GifManager.getAnimation(url);
+            int height = 48; // Default
+            if (anim != null && anim.height > 0) {
+                height = Math.min(anim.height, 90); // Cap at max height for mini-chat
+            }
+
+            // Calculate exact newlines needed (9px per line)
+            int lines = (int) Math.ceil(height / 9.0);
+            String spacing = "\n".repeat(lines);
+
+            // Send with exact spacing embedded
+            // Format: [GIF:url:H<height>] - the H tag tells ClientSetup the exact height
+            String msg = "[GIF:" + url + ":H" + height + "]";
             this.minecraft.player.connection.sendChat(msg);
             this.onClose();
         }

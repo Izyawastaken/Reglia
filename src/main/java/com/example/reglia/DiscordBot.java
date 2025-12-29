@@ -269,9 +269,9 @@ public class DiscordBot implements WebSocket.Listener {
                 String msg = "§9[Discord] §f" + username + "§7: §f" + msgText;
                 for (String gif : finalGifs) {
                     // Register URL to get a short ID, preventing chat wrap issues
-                    // Format matches ClientSetup: \n before tag, \n\n after for spacing
+                    // 9 newlines reserves 81px for max 80px GIF height
                     int id = GifRegistry.register(gif);
-                    msg += "\n[GIF:ID:" + id + "]\n\n";
+                    msg += "\n[GIF:ID:" + id + "]\n\n\n\n\n\n\n\n\n";
                 }
                 broadcast(msg);
             });
