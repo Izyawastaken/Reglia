@@ -1127,6 +1127,69 @@
             }, 3000);
         }
 
+        // Fetch and display online players
+        async function fetchPlayers() {
+            try {
+                const res = await fetch('/api/players');
+                if (res.ok) {
+                    const data = await res.json();
+                    const container = document.getElementById('playerList');
+
+                    if (data.players.length === 0) {
+                        container.innerHTML = `
+                            <div class="empty-state">
+                                <i data-lucide="users" size="48" style="color: var(--text-muted); margin-bottom: 16px;"></i>
+                                <p style="color: var(--text-muted);">No players online</p>
+                                <p style="color: var(--text-muted); font-size: 0.8rem;">Player data will appear when connected to server</p>
+                            </div>`;
+                    } else {
+                        container.innerHTML = data.players.map(p => `
+                            <div class="status-row">
+                                <span class="status-label">${p}</span>
+                                <span class="status-badge active"><div class="dot"></div> Online</span>
+                            </div>
+                        `).join('');
+                    }
+                    lucide.createIcons();
+                }
+            } catch (e) {
+                console.log('Could not fetch players');
+            }
+        }
+
+        // Fetch and display Reglia logs
+        async function fetchLogs() {
+            try {
+                const res = await fetch('/api/logs');
+                if (res.ok) {
+                    const data = await res.json();
+                    const container = document.getElementById('regliaLogs');
+
+                    if (data.logs.length === 0) {
+                        container.innerHTML = `<div class="log-entry"><span class="log-time">[System]</span><span class="log-msg">No logs yet...</span></div>`;
+                    } else {
+                        container.innerHTML = data.logs.map(l => `
+                            <div class="log-entry">
+                                <span class="log-time">[${l.time}]</span>
+                                <span class="log-${l.level.toLowerCase()}">${l.message}</span>
+                            </div>
+                        `).join('');
+                        container.scrollTop = container.scrollHeight;
+                    }
+                }
+            } catch (e) {
+                console.log('Could not fetch logs');
+            }
+        }
+
+        // Auto-refresh when switching pages
+        const originalSwitchPage = switchPage;
+        switchPage = function (pageName) {
+            originalSwitchPage(pageName);
+            if (pageName === 'accounts') fetchPlayers();
+            if (pageName === 'logs') fetchLogs();
+        };
+
     </script>
 </body>
 

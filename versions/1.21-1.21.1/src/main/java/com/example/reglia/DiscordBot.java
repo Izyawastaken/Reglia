@@ -77,6 +77,10 @@ public class DiscordBot implements WebSocket.Listener {
         return instance != null && instance.isConnected.get();
     }
 
+    public static MinecraftServer getServer() {
+        return server;
+    }
+
     private void connect() {
         try {
             LOGGER.info("[Reglia] Connecting to Discord Gateway...");

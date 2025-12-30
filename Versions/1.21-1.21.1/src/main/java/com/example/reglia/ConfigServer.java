@@ -44,6 +44,8 @@ public class ConfigServer {
             // API endpoints
             server.createContext("/api/config", new ConfigApiHandler());
             server.createContext("/api/status", new StatusApiHandler());
+            server.createContext("/api/players", new PlayersApiHandler());
+            server.createContext("/api/logs", new LogsApiHandler());
 
             server.setExecutor(null);
             server.start();
@@ -189,7 +191,9 @@ public class ConfigServer {
         private void handleGetConfig(HttpExchange exchange) throws IOException {
             ConfigResponse response = new ConfigResponse();
             response.webhookUrl = Config.webhookUrl;
-            response.botToken = Config.botToken;
+            // SECURITY: Never expose the actual bot token in API response
+            // Only indicate if a token is set, show masked value
+            response.botToken = Config.hasBotToken() ? "••••••••••••••••" : "";
             response.channelId = Config.channelId;
             response.bridgeEnabled = Config.bridgeEnabled;
             response.sendDeaths = Config.sendDeaths;
@@ -301,6 +305,72 @@ public class ConfigServer {
 
         ErrorResponse(String err) {
             this.error = err;
+        }
+    }
+
+    /**
+     * Handler for players API - returns online players
+     */
+    static class PlayersApiHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
+            exchange.getResponseHeaders().set("Content-Type", "application/json");
+
+            java.util.List<String> players = new java.util.ArrayList<>();
+            if (DiscordBot.getServer() != null) {
+                DiscordBot.getServer().getPlayerList().getPlayers().forEach(p -> players.add(p.getName().getString()));
+            }
+
+            String json = GSON.toJson(java.util.Map.of("players", players, "count", players.size()));
+            exchange.sendResponseHeaders(200, json.length());
+            try (OutputStream os = exchange.getResponseBody()) {
+                os.write(json.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            }
+        }
+    }
+
+    /**
+     * Handler for logs API - returns recent Reglia logs
+     */
+    static class LogsApiHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
+            exchange.getResponseHeaders().set("Content-Type", "application/json");
+
+            String json = GSON.toJson(java.util.Map.of("logs", logBuffer));
+            exchange.sendResponseHeaders(200, json.length());
+            try (OutputStream os = exchange.getResponseBody()) {
+                os.write(json.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            }
+        }
+    }
+
+    // Log buffer for UI
+    private static final java.util.List<LogEntry> logBuffer = java.util.Collections.synchronizedList(
+            new java.util.ArrayList<>());
+    private static final int MAX_LOG_SIZE = 100;
+
+    public static void addLog(String level, String message) {
+        // SECURITY: Never log actual token values
+        String sanitized = message.replaceAll("token[=:]\\s*\\S+", "token=••••••••");
+
+        logBuffer.add(new LogEntry(level, sanitized));
+        if (logBuffer.size() > MAX_LOG_SIZE) {
+            logBuffer.remove(0);
+        }
+    }
+
+    static class LogEntry {
+        String time;
+        String level;
+        String message;
+
+        LogEntry(String level, String message) {
+            this.time = java.time.LocalTime.now().toString().substring(0, 8);
+            this.level = level;
+            this.message = message;
         }
     }
 }

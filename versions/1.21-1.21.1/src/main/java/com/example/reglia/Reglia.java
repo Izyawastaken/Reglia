@@ -1,6 +1,9 @@
 package com.example.reglia;
 
 import com.mojang.logging.LogUtils;
+import net.minecraft.network.chat.ClickEvent;
+import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
@@ -9,6 +12,7 @@ import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.event.ServerChatEvent;
+import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.server.ServerStartingEvent;
 import net.neoforged.neoforge.event.server.ServerStoppingEvent;
 import org.slf4j.Logger;
@@ -31,8 +35,9 @@ public class Reglia {
         NeoForge.EVENT_BUS.addListener(this::onServerStopping);
         NeoForge.EVENT_BUS.addListener(this::onRegisterCommands);
         NeoForge.EVENT_BUS.addListener(this::onServerChat);
+        NeoForge.EVENT_BUS.addListener(this::onPlayerLogin);
 
-        LOGGER.info("[Reglia] Initializing v3.0 for NeoForge 1.21.x");
+        LOGGER.info("[Reglia] Initializing v3.5 for NeoForge 1.21.x");
     }
 
     private void onCommonSetup(FMLCommonSetupEvent event) {
@@ -57,6 +62,29 @@ public class Reglia {
     private void onRegisterCommands(RegisterCommandsEvent event) {
         ModCommands.register(event.getDispatcher());
         LOGGER.info("[Reglia] Commands registered");
+    }
+
+    /**
+     * Handle player login - show first-boot message if not configured
+     */
+    private void onPlayerLogin(PlayerEvent.PlayerLoggedInEvent event) {
+        if (!(event.getEntity() instanceof ServerPlayer player))
+            return;
+
+        // Only show once, and only if not configured
+        if (!Config.firstBootShown && !Config.isConfigured()) {
+            // Only show to ops
+            if (player.hasPermissions(2)) {
+                player.sendSystemMessage(Component.literal("§6[Reglia] §fNot configured! Run ")
+                        .append(Component.literal("§b§n/reglia")
+                                .withStyle(style -> style.withClickEvent(
+                                        new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/reglia"))))
+                        .append(Component.literal("§f to set up.")));
+
+                // Mark as shown so we don't bother again
+                Config.setFirstBootShown(true);
+            }
+        }
     }
 
     /**

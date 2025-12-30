@@ -29,6 +29,7 @@ public class Config {
         public boolean bridgeEnabled = true;
         public boolean sendDeaths = true;
         public boolean sendJoinLeave = true;
+        public boolean firstBootShown = false; // Track if setup message was shown
     }
 
     // Static accessors for easy use
@@ -38,6 +39,7 @@ public class Config {
     public static boolean bridgeEnabled = true;
     public static boolean sendDeaths = true;
     public static boolean sendJoinLeave = true;
+    public static boolean firstBootShown = false;
 
     public static void load() {
         try {
@@ -80,6 +82,7 @@ public class Config {
         bridgeEnabled = data.bridgeEnabled;
         sendDeaths = data.sendDeaths;
         sendJoinLeave = data.sendJoinLeave;
+        firstBootShown = data.firstBootShown;
     }
 
     // Setters
@@ -130,5 +133,15 @@ public class Config {
 
     public static boolean hasChannelId() {
         return channelId != null && !channelId.isEmpty();
+    }
+
+    public static void setFirstBootShown(boolean shown) {
+        data.firstBootShown = shown;
+        firstBootShown = shown;
+        save();
+    }
+
+    public static boolean isConfigured() {
+        return hasWebhook() || hasBotToken();
     }
 }
