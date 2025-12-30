@@ -46,6 +46,8 @@ public class ConfigServer {
             server.createContext("/api/status", new StatusApiHandler());
             server.createContext("/api/players", new PlayersApiHandler());
             server.createContext("/api/logs", new LogsApiHandler());
+            server.createContext("/api/cache/clear", new CacheClearHandler());
+            server.createContext("/api/cache/size", new CacheSizeHandler());
 
             server.setExecutor(null);
             server.start();
@@ -371,6 +373,47 @@ public class ConfigServer {
             this.time = java.time.LocalTime.now().toString().substring(0, 8);
             this.level = level;
             this.message = message;
+        }
+    }
+
+    /**
+     * Handler for clearing GIF cache
+     */
+    static class CacheClearHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
+            exchange.getResponseHeaders().set("Content-Type", "application/json");
+
+            if ("POST".equals(exchange.getRequestMethod())) {
+                com.example.reglia.client.GifManager.clearCache();
+                String json = GSON.toJson(new SuccessResponse("Cache cleared"));
+                exchange.sendResponseHeaders(200, json.length());
+                try (OutputStream os = exchange.getResponseBody()) {
+                    os.write(json.getBytes(StandardCharsets.UTF_8));
+                }
+            } else {
+                exchange.sendResponseHeaders(405, -1);
+            }
+        }
+    }
+
+    /**
+     * Handler for getting cache size
+     */
+    static class CacheSizeHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
+            exchange.getResponseHeaders().set("Content-Type", "application/json");
+
+            long size = com.example.reglia.client.GifManager.getCacheSize();
+            String json = GSON.toJson(java.util.Map.of("size", size));
+
+            exchange.sendResponseHeaders(200, json.length());
+            try (OutputStream os = exchange.getResponseBody()) {
+                os.write(json.getBytes(StandardCharsets.UTF_8));
+            }
         }
     }
 }

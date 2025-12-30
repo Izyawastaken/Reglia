@@ -33,24 +33,44 @@ public class ClientSetup {
 
         // Match both [GIF:url] and [GIF:url:H<height>] formats
         // Use non-greedy match for URL to handle the optional :H suffix
-        java.util.regex.Pattern p = java.util.regex.Pattern.compile("\\[GIF:(https?://[^\\]]+?)(?::H(\\d+))?\\]");
+        // Match [GIF:url:W<width>:H<height>] (Smart Embedding) or legacy formats
+        java.util.regex.Pattern p = java.util.regex.Pattern.compile("\\[GIF:(.*?)(?::W(\\d+))?(?::H(\\d+))?\\]");
         java.util.regex.Matcher m = p.matcher(msg);
 
         if (m.find()) {
             String url = m.group(1);
-            String heightHint = m.group(2);
+            String widthStr = m.group(2);
+            String heightStr = m.group(3);
+
             int id = GifRegistry.register(url);
 
-            // Calculate newlines based on height hint, or default to max
-            int height = 90; // Default max for mini-chat visibility
-            if (heightHint != null) {
-                height = Integer.parseInt(heightHint);
+            // Default fallback
+            int height = 40;
+            int width = 40;
+
+            // Parse smart dimensions if present
+            if (heightStr != null) {
+                try {
+                    height = Integer.parseInt(heightStr);
+                } catch (NumberFormatException ignored) {
+                }
             }
-            int lines = (int) Math.ceil(height / 9.0);
+            if (widthStr != null) {
+                try {
+                    width = Integer.parseInt(widthStr);
+                } catch (NumberFormatException ignored) {
+                }
+            }
+
+            // Calculate precise lines needed (height / 9px per line)
+            // +1 line padding is usually sufficient if height is exact
+            int lines = (int) Math.ceil(height / 9.0) + 1;
             String spacing = "\n".repeat(lines);
 
-            // Replace with short ID and exact spacing
-            String newText = msg.replace(m.group(0), "\n[GIF:ID:" + id + "]" + spacing);
+            // Reconstruct message with ID and dimensions for the renderer to use
+            // Format: [GIF:ID:<id>:W<w>:H<h>]
+            String newTag = "[GIF:ID:" + id + ":W" + width + ":H" + height + "]";
+            String newText = msg.replace(m.group(0), "\n" + newTag + spacing);
             event.setMessage(net.minecraft.network.chat.Component.literal(newText));
         }
     }

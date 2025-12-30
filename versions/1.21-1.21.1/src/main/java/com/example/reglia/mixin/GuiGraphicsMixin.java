@@ -75,31 +75,44 @@ public class GuiGraphicsMixin {
 
         if (detectedUrl[0] == null)
             return;
-        String urlOrId = detectedUrl[0];
-        String url = urlOrId;
 
-        // Resolve ID if present
-        if (urlOrId.startsWith("ID:")) {
-            try {
-                int id = Integer.parseInt(urlOrId.substring(3));
-                String resolved = GifRegistry.getUrl(id);
-                if (resolved != null)
-                    url = resolved;
-            } catch (NumberFormatException ignored) {
+        String rawTag = detectedUrl[0]; // e.g., "ID:123:W50:H40"
+        String url = rawTag;
+        int widthOverride = -1;
+        int heightOverride = -1;
+
+        // Parse ID, W, and H from tag
+        String[] parts = rawTag.split(":");
+        for (int i = 0; i < parts.length; i++) {
+            String part = parts[i];
+            if (part.equals("ID") && i + 1 < parts.length) {
+                try {
+                    int id = Integer.parseInt(parts[i + 1]);
+                    String resolved = GifRegistry.getUrl(id);
+                    if (resolved != null)
+                        url = resolved;
+                } catch (NumberFormatException ignored) {
+                }
+            }
+            if (part.startsWith("W") && part.length() > 1) {
+                try {
+                    widthOverride = Integer.parseInt(part.substring(1));
+                } catch (NumberFormatException ignored) {
+                }
+            }
+            if (part.startsWith("H") && part.length() > 1) {
+                try {
+                    heightOverride = Integer.parseInt(part.substring(1));
+                } catch (NumberFormatException ignored) {
+                }
             }
         }
 
         // Get current animation frame
         ResourceLocation frame = GifManager.getFrame(url);
 
-        // Only hide text and render if we have a valid frame
         if (frame != null) {
             cir.setReturnValue(x);
-
-            // Use original GIF dimensions, capped to prevent huge GIFs
-            // Balanced for visibility in mini-chat HUD
-            int maxHeight = 90; // Max height in pixels
-            int maxWidth = 250; // Max width in pixels
 
             int displayWidth = 48;
             int displayHeight = 48;
@@ -109,33 +122,48 @@ public class GuiGraphicsMixin {
             GifManager.GifAnimation anim = GifManager.getAnimation(url);
 
             if (anim != null && anim.width > 0 && anim.height > 0) {
-                // Start with original dimensions
-                displayWidth = anim.width;
-                displayHeight = anim.height;
                 texWidth = anim.width;
                 texHeight = anim.height;
 
-                // Scale down if too tall
-                if (displayHeight > maxHeight) {
-                    float scale = (float) maxHeight / displayHeight;
-                    displayHeight = maxHeight;
-                    displayWidth = (int) (displayWidth * scale);
-                }
+                // Use override dimensions if present (Smart Embedding)
+                if (widthOverride > 0 && heightOverride > 0) {
+                    displayWidth = widthOverride;
+                    displayHeight = heightOverride;
+                } else {
+                    // Fallback to legacy auto-scaling
+                    displayWidth = anim.width;
+                    displayHeight = anim.height;
+                    int maxHeight = 40;
+                    int maxWidth = 200;
 
-                // Scale down if still too wide
-                if (displayWidth > maxWidth) {
-                    float scale = (float) maxWidth / displayWidth;
-                    displayWidth = maxWidth;
-                    displayHeight = (int) (displayHeight * scale);
+                    if (displayHeight > maxHeight) {
+                        float scale = (float) maxHeight / displayHeight;
+                        displayHeight = maxHeight;
+                        displayWidth = (int) (displayWidth * scale);
+                    }
+                    if (displayWidth > maxWidth) {
+                        float scale = (float) maxWidth / displayWidth;
+                        displayWidth = maxWidth;
+                        displayHeight = (int) (displayHeight * scale);
+                    }
                 }
             }
 
             GuiGraphics graphics = (GuiGraphics) (Object) this;
 
-            // Render at current Y (top of the line).
-            // Since we added newlines in ClientSetup, we have space BELOW this line.
+            // Respect alpha from text color (handles chat opacity/fading)
+            float alpha = ((color >> 24) & 0xFF) / 255.0f;
+            if (alpha <= 0.05f)
+                return; // Don't render if invisible
+
+            com.mojang.blaze3d.systems.RenderSystem.enableBlend();
+            com.mojang.blaze3d.systems.RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, alpha);
+
+            // Render at current Y
             graphics.blit(frame, x, y, displayWidth, displayHeight, 0.0f, 0.0f, texWidth, texHeight, texWidth,
                     texHeight);
+
+            com.mojang.blaze3d.systems.RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f); // Reset
         }
     }
 }

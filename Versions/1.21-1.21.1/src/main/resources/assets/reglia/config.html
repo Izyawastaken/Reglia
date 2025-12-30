@@ -742,116 +742,131 @@
                     </div>
                 </div>
 
-
-
-                <div class="console-window" id="consoleOutput">
-                    <div class="log-entry">
-                        <span class="log-time">[System]</span>
-                        <span class="log-msg">UI initialized successfully. Waiting for input...</span>
+                <div class="card">
+                    <div class="card-title">Storage</div>
+                    <div class="status-row">
+                        <span class="status-label">GIF Cache</span>
+                        <span class="status-label" id="cacheSize"
+                            style="color: var(--text-muted);">Calculating...</span>
                     </div>
-                </div>
-            </div>
-
-            <!-- PAGE: Accounts -->
-            <div class="page" id="page-accounts">
-                <header class="header">
-                    <div>
-                        <h1>Online Players</h1>
-                        <p>Players currently connected to the server.</p>
-                    </div>
-                </header>
-
-                <div class="card" style="min-height: calc(100vh - 180px);">
-                    <div class="card-title">Players</div>
-                    <div id="playerList" class="player-list" style="min-height: calc(100vh - 260px);">
-                        <div class="empty-state">
-                            <i data-lucide="users" size="48" style="color: var(--text-muted); margin-bottom: 16px;"></i>
-                            <p style="color: var(--text-muted);">No players online</p>
-                            <p style="color: var(--text-muted); font-size: 0.8rem;">Player data will appear when
-                                connected to server</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- PAGE: Logs -->
-            <div class="page" id="page-logs">
-                <header class="header">
-                    <div>
-                        <h1>Reglia Logs</h1>
-                        <p>Filtered mod activity logs.</p>
-                    </div>
-                    <button class="nav-item" style="background: var(--bg-input); border: 1px solid var(--border);"
-                        onclick="clearLogs()">
-                        <i data-lucide="trash-2" size="16"></i> Clear
+                    <button class="nav-item"
+                        style="width: 100%; margin-top: 12px; justify-content: center; background: var(--bg-input); border: 1px solid var(--border);"
+                        onclick="clearGifCache()">
+                        <i data-lucide="trash-2" size="16"></i> Clear GIF Cache
                     </button>
-                </header>
-
-                <div class="console-window" id="regliaLogs" style="height: calc(100vh - 180px);">
-                    <div class="log-entry">
-                        <span class="log-time">[System]</span>
-                        <span class="log-msg">Reglia logs will appear here...</span>
-                    </div>
                 </div>
             </div>
 
-            <!-- PAGE: About -->
-            <div class="page" id="page-about">
-                <header class="header">
-                    <div>
-                        <h1>About Reglia</h1>
-                        <p>Mod information and credits.</p>
-                    </div>
-                </header>
 
-                <div class="config-grid">
-                    <div class="card">
-                        <div class="card-title">Mod Info</div>
-                        <div class="status-row">
-                            <span class="status-label">Version</span>
-                            <span class="status-badge active">
-                                <div class="dot"></div> 3.5.0
-                            </span>
-                        </div>
-                        <div class="status-row">
-                            <span class="status-label">Minecraft</span>
-                            <span class="status-badge">
-                                <div class="dot"></div> 1.21.x
-                            </span>
-                        </div>
-                        <div class="status-row">
-                            <span class="status-label">Modloader</span>
-                            <span class="status-badge">
-                                <div class="dot"></div> NeoForge
-                            </span>
-                        </div>
-                    </div>
 
-                    <div class="card">
-                        <div class="card-title">Credits</div>
-                        <div class="status-row">
-                            <span class="status-label">Developer</span>
-                            <span style="color: var(--text-main);">Izyawastaken</span>
-                        </div>
-                        <div class="status-row">
-                            <span class="status-label">License</span>
-                            <span style="color: var(--text-muted);">ARR</span>
-                        </div>
-                        <div class="status-row">
-                            <span class="status-label">Source</span>
-                            <a href="https://github.com/Izyawastaken/Reglia" target="_blank"
-                                style="color: var(--text-main); display: flex; align-items: center;">
-                                <i data-lucide="github" size="20"></i>
-                            </a>
-                        </div>
-                    </div>
+            <div class="console-window" id="consoleOutput">
+                <div class="log-entry">
+                    <span class="log-time">[System]</span>
+                    <span class="log-msg">UI initialized successfully. Waiting for input...</span>
+                </div>
+            </div>
+    </div>
+
+    <!-- PAGE: Accounts -->
+    <div class="page" id="page-accounts">
+        <header class="header">
+            <div>
+                <h1>Online Players</h1>
+                <p>Players currently connected to the server.</p>
+            </div>
+        </header>
+
+        <div class="card" style="min-height: calc(100vh - 180px);">
+            <div class="card-title">Players</div>
+            <div id="playerList" class="player-list" style="min-height: calc(100vh - 260px);">
+                <div class="empty-state">
+                    <i data-lucide="users" size="48" style="color: var(--text-muted); margin-bottom: 16px;"></i>
+                    <p style="color: var(--text-muted);">No players online</p>
+                    <p style="color: var(--text-muted); font-size: 0.8rem;">Player data will appear when
+                        connected to server</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- PAGE: Logs -->
+    <div class="page" id="page-logs">
+        <header class="header">
+            <div>
+                <h1>Reglia Logs</h1>
+                <p>Filtered mod activity logs.</p>
+            </div>
+            <button class="nav-item" style="background: var(--bg-input); border: 1px solid var(--border);"
+                onclick="clearLogs()">
+                <i data-lucide="trash-2" size="16"></i> Clear
+            </button>
+        </header>
+
+        <div class="console-window" id="regliaLogs" style="height: calc(100vh - 180px);">
+            <div class="log-entry">
+                <span class="log-time">[System]</span>
+                <span class="log-msg">Reglia logs will appear here...</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- PAGE: About -->
+    <div class="page" id="page-about">
+        <header class="header">
+            <div>
+                <h1>About Reglia</h1>
+                <p>Mod information and credits.</p>
+            </div>
+        </header>
+
+        <div class="config-grid">
+            <div class="card">
+                <div class="card-title">Mod Info</div>
+                <div class="status-row">
+                    <span class="status-label">Version</span>
+                    <span class="status-badge active">
+                        <div class="dot"></div> 3.5.0
+                    </span>
+                </div>
+                <div class="status-row">
+                    <span class="status-label">Minecraft</span>
+                    <span class="status-badge">
+                        <div class="dot"></div> 1.21.x
+                    </span>
+                </div>
+                <div class="status-row">
+                    <span class="status-label">Modloader</span>
+                    <span class="status-badge">
+                        <div class="dot"></div> NeoForge
+                    </span>
                 </div>
             </div>
 
-        </main>
+            <div class="card">
+                <div class="card-title">Credits</div>
+                <div class="status-row">
+                    <span class="status-label">Developer</span>
+                    <span style="color: var(--text-main);">Izyawastaken</span>
+                </div>
+                <div class="status-row">
+                    <span class="status-label">License</span>
+                    <span style="color: var(--text-muted);">ARR</span>
+                </div>
+                <div class="status-row">
+                    <span class="status-label">Source</span>
+                    <a href="https://github.com/Izyawastaken/Reglia" target="_blank"
+                        style="color: var(--text-main); display: flex; align-items: center;">
+                        <i data-lucide="github" size="20"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
 
-        <!-- Toast Notifications Area -->
-        <div class="toast-container" id="toastContainer"></div>
+    </main>
+
+    <!-- Toast Notifications Area -->
+    <div class="toast-container" id="toastContainer"></div>
     </div>
 
     <script>
@@ -910,6 +925,7 @@
         window.addEventListener('DOMContentLoaded', async () => {
             try {
                 // Fetch config from Java backend
+                fetchCacheSize();
                 const configRes = await fetch('/api/config');
                 if (configRes.ok) {
                     const config = await configRes.json();
@@ -1125,6 +1141,36 @@
                     toast.remove();
                 });
             }, 3000);
+        }
+
+        // Fetch Cache Size
+        async function fetchCacheSize() {
+            try {
+                const res = await fetch('/api/cache/size');
+                if (res.ok) {
+                    const data = await res.json();
+                    const mb = (data.size / (1024 * 1024)).toFixed(1);
+                    document.getElementById('cacheSize').innerText = `${mb} MB`;
+                }
+            } catch (e) {
+                document.getElementById('cacheSize').innerText = 'Unknown';
+            }
+        }
+
+        // Clear GIF Cache
+        async function clearGifCache() {
+            try {
+                const res = await fetch('/api/cache/clear', { method: 'POST' });
+                if (res.ok) {
+                    showToast('GIF Cache cleared', 'success');
+                    fetchCacheSize();
+                    log('GIF Cache cleared manually.', 'info');
+                } else {
+                    showToast('Failed to clear cache', 'error');
+                }
+            } catch (e) {
+                showToast('Error clearing cache', 'error');
+            }
         }
 
         // Fetch and display online players

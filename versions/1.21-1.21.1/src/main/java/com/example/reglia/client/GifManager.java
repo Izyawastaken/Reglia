@@ -22,6 +22,11 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
+import java.util.stream.Stream;
 
 public class GifManager {
     private static final Logger LOGGER = LogUtils.getLogger();
@@ -31,6 +36,18 @@ public class GifManager {
     private static final Map<String, GifAnimation> CACHE = new ConcurrentHashMap<>();
     private static final Pattern OG_IMAGE_PATTERN = Pattern.compile("<meta property=\"og:image\" content=\"([^\"]+)\"");
     private static final Pattern TENOR_DIRECT_PATTERN = Pattern.compile("\"contentUrl\":\\s*\"([^\"]+\\.gif)\"");
+
+    // Cache configuration
+    private static final Path CACHE_DIR = Paths.get("config", "reglia-cache");
+    private static final long MAX_CACHE_SIZE_BYTES = 500 * 1024 * 1024; // 500MB
+
+    static {
+        try {
+            Files.createDirectories(CACHE_DIR);
+        } catch (Exception e) {
+            LOGGER.error("[Reglia] Failed to create cache directory", e);
+        }
+    }
 
     // Limit concurrent downloads to prevent lag
     private static final java.util.concurrent.Semaphore DOWNLOAD_LIMITER = new java.util.concurrent.Semaphore(3);
@@ -75,9 +92,20 @@ public class GifManager {
     private static void downloadAndProcess(String url, GifAnimation anim) {
         CompletableFuture.runAsync(() -> {
             try {
+                // Check disk cache first
+                byte[] cachedData = loadFromDisk(url);
+                if (cachedData != null) {
+                    LOGGER.info("[Reglia] Loaded GIF from disk cache: " + url);
+                    processGifData(url, cachedData, anim);
+                    return;
+                }
+
                 // Limit concurrent downloads to prevent lag
                 DOWNLOAD_LIMITER.acquire();
                 try {
+                    // Check cache size and clean if needed before downloading new stuff
+                    checkCacheSizeAndClean();
+
                     LOGGER.info("[Reglia] Resolving GIF URL: " + url);
                     String resolvedUrl = resolveUrl(url);
                     LOGGER.info("[Reglia] Downloading from: " + resolvedUrl);
@@ -93,29 +121,12 @@ public class GifManager {
                         throw new Exception("Empty or invalid data received");
                     }
 
+                    // Save to disk cache
+                    saveToDisk(url, data);
+
                     LOGGER.info("[Reglia] Downloaded " + data.length + " bytes. Processing OFF render thread...");
+                    processGifData(url, data, anim);
 
-                    // Process frames on THIS async thread (not render thread!)
-                    List<NativeImage> processedFrames = processGifFrames(url, data, anim);
-
-                    // Only register textures on render thread (lightweight)
-                    if (!processedFrames.isEmpty()) {
-                        Minecraft.getInstance().execute(() -> {
-                            for (int i = 0; i < processedFrames.size(); i++) {
-                                DynamicTexture texture = new DynamicTexture(processedFrames.get(i));
-                                String texturePath = "reglia_gif_" + Math.abs(url.hashCode()) + "_" + i;
-                                ResourceLocation loc = Minecraft.getInstance().getTextureManager().register(texturePath,
-                                        texture);
-                                anim.frames.add(loc);
-                                anim.frameDelays.add(100);
-                                anim.totalDuration += 100;
-                            }
-                            anim.loading = false;
-                            LOGGER.info("[Reglia] Registered " + processedFrames.size() + " textures for " + url);
-                        });
-                    } else {
-                        anim.loading = false;
-                    }
                 } finally {
                     DOWNLOAD_LIMITER.release();
                 }
@@ -124,6 +135,103 @@ public class GifManager {
                 anim.loading = false;
             }
         });
+    }
+
+    private static void processGifData(String url, byte[] data, GifAnimation anim) {
+        try {
+            // Process frames on THIS async thread (not render thread!)
+            List<NativeImage> processedFrames = processGifFrames(url, data, anim);
+
+            // Only register textures on render thread (lightweight)
+            if (!processedFrames.isEmpty()) {
+                Minecraft.getInstance().execute(() -> {
+                    for (int i = 0; i < processedFrames.size(); i++) {
+                        DynamicTexture texture = new DynamicTexture(processedFrames.get(i));
+                        String texturePath = "reglia_gif_" + Math.abs(url.hashCode()) + "_" + i;
+                        ResourceLocation loc = Minecraft.getInstance().getTextureManager().register(texturePath,
+                                texture);
+                        anim.frames.add(loc);
+                        anim.frameDelays.add(100);
+                        anim.totalDuration += 100;
+                    }
+                    anim.loading = false;
+                    LOGGER.info("[Reglia] Registered " + processedFrames.size() + " textures for " + url);
+                });
+            } else {
+                anim.loading = false;
+            }
+        } catch (Exception e) {
+            LOGGER.error("[Reglia] Error processing GIF data for " + url, e);
+            anim.loading = false;
+        }
+    }
+
+    // --- Cache Management ---
+
+    private static String getCacheKey(String url) {
+        return Integer.toHexString(url.hashCode()) + ".gif";
+    }
+
+    private static void saveToDisk(String url, byte[] data) {
+        try {
+            Path file = CACHE_DIR.resolve(getCacheKey(url));
+            Files.write(file, data, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+        } catch (Exception e) {
+            LOGGER.error("[Reglia] Failed to save to cache", e);
+        }
+    }
+
+    private static byte[] loadFromDisk(String url) {
+        try {
+            Path file = CACHE_DIR.resolve(getCacheKey(url));
+            if (Files.exists(file)) {
+                // Update modification time for LRU cleanup
+                Files.setLastModifiedTime(file,
+                        java.nio.file.attribute.FileTime.fromMillis(System.currentTimeMillis()));
+                return Files.readAllBytes(file);
+            }
+        } catch (Exception e) {
+            LOGGER.warn("[Reglia] Failed to read from cache", e);
+        }
+        return null;
+    }
+
+    public static long getCacheSize() {
+        try {
+            if (!Files.exists(CACHE_DIR))
+                return 0;
+            try (Stream<Path> walk = Files.walk(CACHE_DIR)) {
+                return walk.filter(p -> p.toFile().isFile())
+                        .mapToLong(p -> p.toFile().length())
+                        .sum();
+            }
+        } catch (Exception e) {
+            LOGGER.error("[Reglia] Failed to calculate cache size", e);
+            return 0;
+        }
+    }
+
+    public static void clearCache() {
+        try {
+            if (Files.exists(CACHE_DIR)) {
+                try (Stream<Path> walk = Files.walk(CACHE_DIR)) {
+                    walk.sorted(Comparator.reverseOrder())
+                            .map(Path::toFile)
+                            .forEach(java.io.File::delete);
+                }
+                Files.createDirectories(CACHE_DIR);
+                LOGGER.info("[Reglia] Cache cleared successfully");
+            }
+        } catch (Exception e) {
+            LOGGER.error("[Reglia] Failed to clear cache", e);
+        }
+    }
+
+    private static void checkCacheSizeAndClean() {
+        if (getCacheSize() > MAX_CACHE_SIZE_BYTES) {
+            LOGGER.info("[Reglia] Cache size limit exceeded (>500MB). Clearing cache...");
+            clearCache();
+        }
     }
 
     private static String resolveUrl(String url) throws Exception {
