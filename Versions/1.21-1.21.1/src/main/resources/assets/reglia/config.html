@@ -906,29 +906,63 @@
             toggleJoinLeave: document.getElementById('toggleJoinLeave')
         };
 
-        // Load cached settings on startup
-        window.addEventListener('DOMContentLoaded', () => {
-            const savedConfig = localStorage.getItem('reglia_config');
-            if (savedConfig) {
-                const config = JSON.parse(savedConfig);
-                els.token.value = config.token || '';
-                els.webhook.value = config.webhook || '';
-                els.channelId.value = config.channelId || '';
+        // Load config from Java backend on startup
+        window.addEventListener('DOMContentLoaded', async () => {
+            try {
+                // Fetch config from Java backend
+                const configRes = await fetch('/api/config');
+                if (configRes.ok) {
+                    const config = await configRes.json();
+                    els.token.value = config.botToken || '';
+                    els.webhook.value = config.webhookUrl || '';
+                    els.channelId.value = config.channelId || '';
 
-                // Load toggle states
-                state.sendDeaths = config.sendDeaths !== false;
-                state.sendJoinLeave = config.sendJoinLeave !== false;
-                if (state.sendDeaths) els.toggleDeaths.classList.add('on');
-                if (state.sendJoinLeave) els.toggleJoinLeave.classList.add('on');
+                    state.sendDeaths = config.sendDeaths !== false;
+                    state.sendJoinLeave = config.sendJoinLeave !== false;
+                    state.isRunning = config.bridgeEnabled;
 
-                if (config.token || config.webhook) {
-                    log('Loaded previous configuration from local storage.', 'success');
+                    if (state.sendDeaths) els.toggleDeaths.classList.add('on');
+                    if (state.sendJoinLeave) els.toggleJoinLeave.classList.add('on');
+
+                    log('Loaded configuration from server.', 'success');
                     validateInputs();
                 }
-            } else {
-                // Default both toggles to ON
-                els.toggleDeaths.classList.add('on');
-                els.toggleJoinLeave.classList.add('on');
+
+                // Fetch status from Java backend
+                const statusRes = await fetch('/api/status');
+                if (statusRes.ok) {
+                    const status = await statusRes.json();
+
+                    if (status.webhookConfigured) {
+                        setStatus(els.statusWebhook, 'Set', 'active');
+                    }
+
+                    if (status.botConnected) {
+                        setStatus(els.statusBot, 'Connected', 'active');
+                        els.toggle.classList.add('active');
+                        document.getElementById('powerSwitch').classList.add('on');
+                        els.label.innerText = "Disable Reglia";
+                        state.isRunning = true;
+                    }
+                }
+            } catch (e) {
+                log('Could not connect to Reglia backend. Using browser mode.', 'warn');
+                // Fallback to localStorage for standalone testing
+                const savedConfig = localStorage.getItem('reglia_config');
+                if (savedConfig) {
+                    const config = JSON.parse(savedConfig);
+                    els.token.value = config.token || '';
+                    els.webhook.value = config.webhook || '';
+                    els.channelId.value = config.channelId || '';
+                    state.sendDeaths = config.sendDeaths !== false;
+                    state.sendJoinLeave = config.sendJoinLeave !== false;
+                    if (state.sendDeaths) els.toggleDeaths.classList.add('on');
+                    if (state.sendJoinLeave) els.toggleJoinLeave.classList.add('on');
+                    validateInputs();
+                } else {
+                    els.toggleDeaths.classList.add('on');
+                    els.toggleJoinLeave.classList.add('on');
+                }
             }
         });
 
@@ -952,19 +986,43 @@
         }
 
         // Save Functionality
-        function saveSettings() {
+        async function saveSettings() {
+            validateInputs();
+
             const config = {
-                token: state.token,
-                webhook: state.webhook,
+                botToken: state.token,
+                webhookUrl: state.webhook,
                 channelId: state.channelId,
                 sendDeaths: state.sendDeaths,
-                sendJoinLeave: state.sendJoinLeave
+                sendJoinLeave: state.sendJoinLeave,
+                bridgeEnabled: state.isRunning
             };
-            localStorage.setItem('reglia_config', JSON.stringify(config));
 
-            showToast('Configuration saved!', 'success');
-            log('Settings saved.', 'success');
-            validateInputs();
+            try {
+                const res = await fetch('/api/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(config)
+                });
+
+                if (res.ok) {
+                    showToast('Configuration saved!', 'success');
+                    log('Settings saved to server.', 'success');
+                } else {
+                    throw new Error('Server error');
+                }
+            } catch (e) {
+                // Fallback to localStorage for standalone testing
+                localStorage.setItem('reglia_config', JSON.stringify({
+                    token: state.token,
+                    webhook: state.webhook,
+                    channelId: state.channelId,
+                    sendDeaths: state.sendDeaths,
+                    sendJoinLeave: state.sendJoinLeave
+                }));
+                showToast('Configuration saved locally.', 'success');
+                log('Settings saved (browser mode).', 'warn');
+            }
         }
 
         // Toggle Option (mini switches)

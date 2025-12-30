@@ -72,15 +72,41 @@ public class ConfigServer {
      * Open the config page in default browser
      */
     private static void openBrowser() {
+        String url = "http://localhost:" + DEFAULT_PORT;
+
         try {
+            // Try Desktop.browse first
             if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
-                Desktop.getDesktop().browse(new URI("http://localhost:" + DEFAULT_PORT));
-            } else {
-                LOGGER.warn("[Reglia] Cannot open browser automatically. Visit http://localhost:{}", DEFAULT_PORT);
+                Desktop.getDesktop().browse(new URI(url));
+                LOGGER.info("[Reglia] Opened browser via Desktop API");
+                return;
             }
         } catch (Exception e) {
-            LOGGER.error("[Reglia] Failed to open browser", e);
+            LOGGER.debug("[Reglia] Desktop.browse failed: {}", e.getMessage());
         }
+
+        // Fallback: use OS-specific commands
+        try {
+            String os = System.getProperty("os.name").toLowerCase();
+            ProcessBuilder pb;
+
+            if (os.contains("win")) {
+                pb = new ProcessBuilder("cmd", "/c", "start", url);
+            } else if (os.contains("mac")) {
+                pb = new ProcessBuilder("open", url);
+            } else {
+                pb = new ProcessBuilder("xdg-open", url);
+            }
+
+            pb.start();
+            LOGGER.info("[Reglia] Opened browser via system command");
+        } catch (Exception e) {
+            LOGGER.warn("[Reglia] Could not auto-open browser. Visit: {}", url);
+        }
+    }
+
+    public static String getUrl() {
+        return "http://localhost:" + DEFAULT_PORT;
     }
 
     public static boolean isRunning() {

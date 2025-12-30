@@ -47,8 +47,16 @@ public class ModCommands {
     }
 
     private static int openConfig(CommandContext<CommandSourceStack> ctx) {
-        ctx.getSource().sendSuccess(() -> Component.literal("§6[Reglia] §fOpening config panel..."), false);
         ConfigServer.startAndOpenBrowser();
+        String url = ConfigServer.getUrl();
+
+        // Send clickable URL in chat
+        ctx.getSource().sendSuccess(() -> Component.literal("§6[Reglia] §fConfig panel: ")
+                .append(Component.literal("§b§n" + url)
+                        .withStyle(style -> style
+                                .withClickEvent(new net.minecraft.network.chat.ClickEvent(
+                                        net.minecraft.network.chat.ClickEvent.Action.OPEN_URL, url)))),
+                false);
         return 1;
     }
 
