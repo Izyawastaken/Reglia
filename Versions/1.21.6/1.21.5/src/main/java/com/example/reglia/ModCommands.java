@@ -36,27 +36,14 @@ public class ModCommands {
                 .then(Commands.literal("status").executes(ModCommands::status))
                 .then(Commands.literal("test").requires(s -> s.hasPermission(2)).executes(ModCommands::testWebhook))
                 .then(Commands.literal("toggle").requires(s -> s.hasPermission(2)).executes(ModCommands::toggle))
-                .then(Commands.literal("reconnect").requires(s -> s.hasPermission(2))
-                        .executes(ModCommands::reconnect)));
-
-        // /reglia - opens config panel
-        dispatcher.register(Commands.literal("reglia")
-                .requires(source -> source.hasPermission(2))
-                .executes(ModCommands::openConfig)
-                .then(Commands.literal("config").executes(ModCommands::openConfig)));
-    }
-
-    private static int openConfig(CommandContext<CommandSourceStack> ctx) {
-        ctx.getSource().sendSuccess(() -> Component.literal("§6[Reglia] §fOpening config panel..."), false);
-        ConfigServer.startAndOpenBrowser();
-        return 1;
+                .then(Commands.literal("reconnect").requires(s -> s.hasPermission(2)).executes(ModCommands::reconnect)));
     }
 
     private static int setWebhook(CommandContext<CommandSourceStack> ctx) {
         String url = StringArgumentType.getString(ctx, "url");
 
-        if (!url.startsWith("https://discord.com/api/webhooks/") &&
-                !url.startsWith("https://discordapp.com/api/webhooks/")) {
+        if (!url.startsWith("https://discord.com/api/webhooks/") && 
+            !url.startsWith("https://discordapp.com/api/webhooks/")) {
             ctx.getSource().sendFailure(Component.literal("§cInvalid webhook URL!"));
             return 0;
         }

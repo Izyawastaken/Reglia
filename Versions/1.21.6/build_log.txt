@@ -1,0 +1,49 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.8/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :createArtifactManifest UP-TO-DATE
+> Task :createMinecraftArtifacts UP-TO-DATE
+
+> Task :compileJava FAILED
+C:\Users\Admin\Projects\Reglia\Versions\1.21.6\src\main\java\com\example\reglia\Reglia.java:67: error: cannot find symbol
+    private void onRegisterKeyMappings(RegisterKeyMappingsEvent event) {
+                                       ^
+  symbol:   class RegisterKeyMappingsEvent
+  location: class Reglia
+C:\Users\Admin\Projects\Reglia\Versions\1.21.6\src\main\java\com\example\reglia\client\GifSelectorScreen.java:104: error: cannot find symbol
+                graphics.pose().push();
+                               ^
+  symbol:   method push()
+  location: class Matrix3x2fStack
+C:\Users\Admin\Projects\Reglia\Versions\1.21.6\src\main\java\com\example\reglia\client\GifSelectorScreen.java:109: error: invalid method reference
+                graphics.blit(RenderType::guiTextured, frame, 0, 0, 0, 0, anim.width, anim.height, anim.width,
+                              ^
+  cannot find symbol
+    symbol:   method guiTextured()
+    location: class RenderType
+C:\Users\Admin\Projects\Reglia\Versions\1.21.6\src\main\java\com\example\reglia\mixin\GuiGraphicsMixin.java:154: error: cannot find symbol
+            graphics.pose().push();
+                           ^
+  symbol:   method push()
+  location: class Matrix3x2fStack
+C:\Users\Admin\Projects\Reglia\Versions\1.21.6\src\main\java\com\example\reglia\mixin\GuiGraphicsMixin.java:159: error: invalid method reference
+            graphics.blit(RenderType::guiTextured, frame, 0, 0, 0, 0, texWidth, texHeight, texWidth, texHeight);
+                          ^
+  cannot find symbol
+    symbol:   method guiTextured()
+    location: class RenderType
+Note: C:\Users\Admin\Projects\Reglia\Versions\1.21.6\src\main\java\com\example\reglia\DiscordWebhook.java uses or overrides a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+5 errors
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':compileJava'.
+> Compilation failed; see the compiler error output for details.
+
+* Try:
+> Run with --info option to get more log output.
+> Run with --scan to get full insights.
+
+BUILD FAILED in 6s
+3 actionable tasks: 1 executed, 2 up-to-date

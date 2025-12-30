@@ -1,0 +1,1075 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reglia Configuration</title>
+
+    <!-- Load Lucide Icons (Vanilla version) -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <style>
+        :root {
+            /* Palette: Monochromatic Professional */
+            --bg-body: #050505;
+            --bg-card: #111111;
+            --bg-input: #1a1a1a;
+            --border: #2a2a2a;
+            --border-hover: #404040;
+            --text-main: #ffffff;
+            --text-muted: #888888;
+            --accent: #ffffff;
+
+            /* Status Colors (Subtle tint on B&W) */
+            --success: #e2e8f0;
+            /* Very light grey-white for success */
+            --error: #7f1d1d;
+            /* Dark red for errors, kept very subtle */
+            --error-bg: #450a0a;
+
+            /* Animation Curves (iOS-like Spring) */
+            --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        body {
+            background-color: var(--bg-body);
+            color: var(--text-main);
+            min-height: 100vh;
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden;
+            background-image: radial-gradient(circle at 50% 50%, #151515 0%, #000000 100%);
+        }
+
+        /* --- Layout --- */
+        .app-container {
+            display: grid;
+            grid-template-columns: 260px 1fr;
+            width: 100vw;
+            min-height: 100vh;
+            background: var(--bg-body);
+            overflow: hidden;
+            opacity: 0;
+            animation: appEntrance 0.6s var(--ease-smooth) forwards;
+        }
+
+        /* Responsive: Tablet */
+        @media (max-width: 900px) {
+            .app-container {
+                grid-template-columns: 220px 1fr;
+            }
+
+            .config-grid {
+                grid-template-columns: 1fr !important;
+            }
+        }
+
+        /* Responsive: Mobile */
+        @media (max-width: 640px) {
+            .app-container {
+                grid-template-columns: 1fr;
+            }
+
+            .sidebar {
+                display: none;
+            }
+
+            .main-content {
+                padding: 20px !important;
+            }
+
+            .header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 16px;
+            }
+        }
+
+        /* --- Sidebar --- */
+        .sidebar {
+            border-right: 1px solid var(--border);
+            padding: 32px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .brand-icon {
+            width: 32px;
+            height: 32px;
+            background: var(--text-main);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--bg-body);
+        }
+
+        .brand-name {
+            font-size: 1.25rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+        }
+
+        .nav-menu {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: 40px;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            border-radius: 12px;
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: all 0.2s var(--ease-smooth);
+            font-size: 0.95rem;
+        }
+
+        .nav-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-main);
+        }
+
+        .nav-item.active {
+            background: var(--text-main);
+            color: var(--bg-body);
+            font-weight: 600;
+        }
+
+        .version {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        /* --- Main Content --- */
+        .main-content {
+            padding: 40px;
+            overflow-y: auto;
+            position: relative;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            margin-bottom: 32px;
+        }
+
+        .header h1 {
+            font-size: 2rem;
+            font-weight: 600;
+            letter-spacing: -0.03em;
+        }
+
+        .header p {
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .power-bar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 16px;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s var(--ease-smooth);
+        }
+
+        .power-bar:hover {
+            border-color: var(--border-hover);
+        }
+
+        .power-bar.active {
+            background: var(--text-main);
+            border-color: var(--text-main);
+        }
+
+        .power-bar.active span {
+            color: var(--bg-body);
+        }
+
+        .power-bar span {
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: var(--text-main);
+        }
+
+        /* --- Config Grid --- */
+        .config-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            margin-bottom: 32px;
+        }
+
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 24px;
+            transition: border-color 0.3s;
+        }
+
+        .card:hover {
+            border-color: var(--border-hover);
+        }
+
+        .card-title {
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            margin-bottom: 16px;
+            font-weight: 600;
+        }
+
+        /* --- Inputs --- */
+        .input-group {
+            position: relative;
+            margin-bottom: 20px;
+        }
+
+        .input-group:last-child {
+            margin-bottom: 0;
+        }
+
+        .input-field {
+            width: 100%;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            padding: 16px;
+            padding-right: 40px;
+            /* Space for icon */
+            border-radius: 12px;
+            color: var(--text-main);
+            font-size: 0.95rem;
+            outline: none;
+            transition: all 0.2s;
+        }
+
+        .input-field:focus {
+            border-color: var(--text-main);
+            background: #222;
+        }
+
+        .input-icon {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-muted);
+            pointer-events: none;
+        }
+
+        /* --- Status Indicators --- */
+        .status-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .status-row:last-child {
+            border-bottom: none;
+        }
+
+        .status-label {
+            font-size: 0.9rem;
+        }
+
+        .status-badge {
+            font-size: 0.75rem;
+            padding: 4px 10px;
+            border-radius: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--text-muted);
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.3s;
+        }
+
+        .status-badge.active {
+            background: var(--text-main);
+            color: var(--bg-body);
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.2);
+        }
+
+        .status-badge.error {
+            background: var(--error-bg);
+            color: #ffadad;
+            border: 1px solid var(--error);
+        }
+
+        .dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background-color: currentColor;
+        }
+
+        /* --- Main Toggle (Power Button) --- */
+        .power-section {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            margin-top: 20px;
+            padding: 24px;
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.02) 0%, rgba(255, 255, 255, 0) 100%);
+        }
+
+        /* Haptic Switch Container */
+        .switch-container {
+            position: relative;
+            width: 80px;
+            height: 40px;
+            background: #222;
+            border-radius: 40px;
+            cursor: pointer;
+            transition: background 0.3s;
+            box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.5);
+        }
+
+        .switch-knob {
+            position: absolute;
+            top: 4px;
+            left: 4px;
+            width: 32px;
+            height: 32px;
+            background: white;
+            border-radius: 50%;
+            transition: transform 0.4s var(--ease-spring), box-shadow 0.3s;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .switch-knob i {
+            width: 16px;
+            height: 16px;
+            color: #333;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        /* Toggle Active States */
+        .switch-container.active {
+            background: rgba(255, 255, 255, 0.9);
+        }
+
+        .switch-container.active .switch-knob {
+            transform: translateX(40px);
+            background: #000;
+        }
+
+        .switch-container.active .switch-knob i {
+            color: white;
+            opacity: 1;
+        }
+
+        .switch-label {
+            margin-top: 16px;
+            font-weight: 600;
+            font-size: 1rem;
+            letter-spacing: 0.02em;
+        }
+
+        .switch-sub {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        /* --- Mini Toggle Switch --- */
+        .mini-switch {
+            position: relative;
+            width: 44px;
+            height: 24px;
+            background: #333;
+            border-radius: 24px;
+            cursor: pointer;
+            transition: background 0.3s var(--ease-smooth);
+        }
+
+        .mini-switch.on {
+            background: var(--text-main);
+        }
+
+        .mini-knob {
+            position: absolute;
+            top: 3px;
+            left: 3px;
+            width: 18px;
+            height: 18px;
+            background: white;
+            border-radius: 50%;
+            transition: transform 0.3s var(--ease-spring);
+        }
+
+        .mini-switch.on .mini-knob {
+            transform: translateX(20px);
+            background: #000;
+        }
+
+        /* Power bar toggle fix */
+        .power-bar.active .mini-switch {
+            background: #000;
+        }
+
+        .power-bar.active .mini-switch .mini-knob {
+            transform: translateX(20px);
+            background: #fff;
+        }
+
+        /* --- Page Containers --- */
+        .page {
+            display: none;
+            animation: fadeIn 0.3s var(--ease-smooth);
+        }
+
+        .page.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 48px 24px;
+            text-align: center;
+        }
+
+        .player-list {
+            min-height: 200px;
+        }
+
+        /* --- Console/Logs --- */
+        .console-window {
+            margin-top: 24px;
+            background: #000;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            height: 300px;
+            padding: 12px;
+            font-family: "SF Mono", "Monaco", "Consolas", monospace;
+            font-size: 0.75rem;
+            color: #666;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .log-entry {
+            display: flex;
+            gap: 8px;
+        }
+
+        .log-time {
+            color: #444;
+        }
+
+        .log-msg {
+            color: #888;
+        }
+
+        .log-success {
+            color: #fff;
+        }
+
+        .log-error {
+            color: #ff6b6b;
+        }
+
+        .log-warn {
+            color: #fbbf24;
+        }
+
+        .log-info {
+            color: #60a5fa;
+        }
+
+        /* --- Animations --- */
+        @keyframes appEntrance {
+            0% {
+                opacity: 0;
+                transform: scale(0.95) translateY(20px);
+            }
+
+            100% {
+                opacity: 1;
+                transform: scale(1) translateY(0);
+            }
+        }
+
+        @keyframes pulse {
+            0% {
+                box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.4);
+            }
+
+            70% {
+                box-shadow: 0 0 0 10px rgba(255, 255, 255, 0);
+            }
+
+            100% {
+                box-shadow: 0 0 0 0 rgba(255, 255, 255, 0);
+            }
+        }
+
+        .pulse-effect {
+            animation: pulse 0.6s ease-out;
+        }
+
+        /* Toast Notification */
+        .toast-container {
+            position: absolute;
+            bottom: 32px;
+            right: 32px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            pointer-events: none;
+        }
+
+        .toast {
+            background: #1a1a1a;
+            border: 1px solid var(--border);
+            color: white;
+            padding: 12px 20px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            opacity: 0;
+            transform: translateY(20px);
+            animation: toastIn 0.4s var(--ease-spring) forwards;
+        }
+
+        .toast.hiding {
+            animation: toastOut 0.3s ease forwards;
+        }
+
+        @keyframes toastIn {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes toastOut {
+            to {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #333;
+            border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="app-container">
+        <!-- Sidebar -->
+        <nav class="sidebar">
+            <div>
+                <div class="brand">
+                    <div class="brand-icon">
+                        <i data-lucide="blocks"></i>
+                    </div>
+                    <span class="brand-name">Reglia Console</span>
+                </div>
+
+                <div class="nav-menu">
+                    <div class="nav-item active" data-page="config" onclick="switchPage('config')">
+                        <i data-lucide="sliders" size="18"></i>
+                        Configuration
+                    </div>
+                    <div class="nav-item" data-page="accounts" onclick="switchPage('accounts')">
+                        <i data-lucide="users" size="18"></i>
+                        Accounts
+                    </div>
+                    <div class="nav-item" data-page="logs" onclick="switchPage('logs')">
+                        <i data-lucide="scroll-text" size="18"></i>
+                        Logs
+                    </div>
+                    <div class="nav-item" data-page="about" onclick="switchPage('about')">
+                        <i data-lucide="info" size="18"></i>
+                        About
+                    </div>
+                </div>
+            </div>
+
+            <div class="version">
+                v3.5.0
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- PAGE: Configuration -->
+            <div class="page active" id="page-config">
+                <header class="header">
+                    <div>
+                        <h1>Bridge Settings</h1>
+                        <p>Configure your Discord <-> Minecraft connection.</p>
+                    </div>
+                    <div class="header-actions">
+                        <div class="power-bar" id="mainToggle" onclick="toggleBot()">
+                            <div class="mini-switch" id="powerSwitch">
+                                <div class="mini-knob"></div>
+                            </div>
+                            <span id="switchLabel">Enable Reglia</span>
+                        </div>
+                        <button class="nav-item" style="background: var(--bg-input); border: 1px solid var(--border);"
+                            onclick="saveSettings()">
+                            <i data-lucide="save" size="16"></i> Save Changes
+                        </button>
+                    </div>
+                </header>
+
+                <div class="config-grid">
+                    <div class="card">
+                        <div class="card-title">Credentials</div>
+                        <div class="input-group">
+                            <input type="password" id="botToken" class="input-field" placeholder="Bot Token">
+                            <i data-lucide="key" class="input-icon" size="18"></i>
+                        </div>
+                        <div class="input-group">
+                            <input type="text" id="webhookUrl" class="input-field" placeholder="Webhook URL">
+                            <i data-lucide="link" class="input-icon" size="18"></i>
+                        </div>
+                        <div class="input-group">
+                            <input type="text" id="channelId" class="input-field" placeholder="Channel ID">
+                            <i data-lucide="hash" class="input-icon" size="18"></i>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-title">Options</div>
+                        <div class="status-row">
+                            <span class="status-label">Send Death Messages</span>
+                            <div class="mini-switch" id="toggleDeaths" onclick="toggleOption('deaths')">
+                                <div class="mini-knob"></div>
+                            </div>
+                        </div>
+                        <div class="status-row">
+                            <span class="status-label">Send Join/Leave</span>
+                            <div class="mini-switch" id="toggleJoinLeave" onclick="toggleOption('joinLeave')">
+                                <div class="mini-knob"></div>
+                            </div>
+                        </div>
+                        <div class="status-row"
+                            style="border-top: 1px solid var(--border); margin-top: 12px; padding-top: 16px;">
+                            <span class="status-label">Webhook</span>
+                            <span class="status-badge" id="statusWebhook">
+                                <div class="dot"></div> Unset
+                            </span>
+                        </div>
+                        <div class="status-row">
+                            <span class="status-label">Bot</span>
+                            <span class="status-badge" id="statusBot">
+                                <div class="dot"></div> Disconnected
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+
+
+                <div class="console-window" id="consoleOutput">
+                    <div class="log-entry">
+                        <span class="log-time">[System]</span>
+                        <span class="log-msg">UI initialized successfully. Waiting for input...</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PAGE: Accounts -->
+            <div class="page" id="page-accounts">
+                <header class="header">
+                    <div>
+                        <h1>Online Players</h1>
+                        <p>Players currently connected to the server.</p>
+                    </div>
+                </header>
+
+                <div class="card" style="min-height: calc(100vh - 180px);">
+                    <div class="card-title">Players</div>
+                    <div id="playerList" class="player-list" style="min-height: calc(100vh - 260px);">
+                        <div class="empty-state">
+                            <i data-lucide="users" size="48" style="color: var(--text-muted); margin-bottom: 16px;"></i>
+                            <p style="color: var(--text-muted);">No players online</p>
+                            <p style="color: var(--text-muted); font-size: 0.8rem;">Player data will appear when
+                                connected to server</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PAGE: Logs -->
+            <div class="page" id="page-logs">
+                <header class="header">
+                    <div>
+                        <h1>Reglia Logs</h1>
+                        <p>Filtered mod activity logs.</p>
+                    </div>
+                    <button class="nav-item" style="background: var(--bg-input); border: 1px solid var(--border);"
+                        onclick="clearLogs()">
+                        <i data-lucide="trash-2" size="16"></i> Clear
+                    </button>
+                </header>
+
+                <div class="console-window" id="regliaLogs" style="height: calc(100vh - 180px);">
+                    <div class="log-entry">
+                        <span class="log-time">[System]</span>
+                        <span class="log-msg">Reglia logs will appear here...</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PAGE: About -->
+            <div class="page" id="page-about">
+                <header class="header">
+                    <div>
+                        <h1>About Reglia</h1>
+                        <p>Mod information and credits.</p>
+                    </div>
+                </header>
+
+                <div class="config-grid">
+                    <div class="card">
+                        <div class="card-title">Mod Info</div>
+                        <div class="status-row">
+                            <span class="status-label">Version</span>
+                            <span class="status-badge active">
+                                <div class="dot"></div> 3.5.0
+                            </span>
+                        </div>
+                        <div class="status-row">
+                            <span class="status-label">Minecraft</span>
+                            <span class="status-badge">
+                                <div class="dot"></div> 1.21.x
+                            </span>
+                        </div>
+                        <div class="status-row">
+                            <span class="status-label">Modloader</span>
+                            <span class="status-badge">
+                                <div class="dot"></div> NeoForge
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-title">Credits</div>
+                        <div class="status-row">
+                            <span class="status-label">Developer</span>
+                            <span style="color: var(--text-main);">Izyawastaken</span>
+                        </div>
+                        <div class="status-row">
+                            <span class="status-label">License</span>
+                            <span style="color: var(--text-muted);">ARR</span>
+                        </div>
+                        <div class="status-row">
+                            <span class="status-label">Source</span>
+                            <a href="https://github.com/Izyawastaken/Reglia" target="_blank"
+                                style="color: var(--text-main); display: flex; align-items: center;">
+                                <i data-lucide="github" size="20"></i>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+
+        <!-- Toast Notifications Area -->
+        <div class="toast-container" id="toastContainer"></div>
+    </div>
+
+    <script>
+        // Initialize Icons
+        lucide.createIcons();
+
+        // Page Navigation
+        function switchPage(pageName) {
+            // Hide all pages
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            // Show target page
+            document.getElementById('page-' + pageName).classList.add('active');
+
+            // Update nav items
+            document.querySelectorAll('.nav-item[data-page]').forEach(n => n.classList.remove('active'));
+            document.querySelector(`.nav-item[data-page="${pageName}"]`).classList.add('active');
+
+            // Re-render icons for newly visible pages
+            lucide.createIcons();
+        }
+
+        // Clear Logs
+        function clearLogs() {
+            const logsContainer = document.getElementById('regliaLogs');
+            logsContainer.innerHTML = '<div class="log-entry"><span class="log-time">[System]</span><span class="log-msg">Logs cleared.</span></div>';
+            showToast('Logs cleared', 'success');
+        }
+
+        // State Management
+        const state = {
+            isRunning: false,
+            token: '',
+            webhook: '',
+            channelId: '',
+            sendDeaths: true,
+            sendJoinLeave: true,
+            configValid: false
+        };
+
+        // DOM Elements
+        const els = {
+            token: document.getElementById('botToken'),
+            webhook: document.getElementById('webhookUrl'),
+            channelId: document.getElementById('channelId'),
+            toggle: document.getElementById('mainToggle'),
+            label: document.getElementById('switchLabel'),
+            console: document.getElementById('consoleOutput'),
+            toastContainer: document.getElementById('toastContainer'),
+            statusWebhook: document.getElementById('statusWebhook'),
+            statusBot: document.getElementById('statusBot'),
+            toggleDeaths: document.getElementById('toggleDeaths'),
+            toggleJoinLeave: document.getElementById('toggleJoinLeave')
+        };
+
+        // Load cached settings on startup
+        window.addEventListener('DOMContentLoaded', () => {
+            const savedConfig = localStorage.getItem('reglia_config');
+            if (savedConfig) {
+                const config = JSON.parse(savedConfig);
+                els.token.value = config.token || '';
+                els.webhook.value = config.webhook || '';
+                els.channelId.value = config.channelId || '';
+
+                // Load toggle states
+                state.sendDeaths = config.sendDeaths !== false;
+                state.sendJoinLeave = config.sendJoinLeave !== false;
+                if (state.sendDeaths) els.toggleDeaths.classList.add('on');
+                if (state.sendJoinLeave) els.toggleJoinLeave.classList.add('on');
+
+                if (config.token || config.webhook) {
+                    log('Loaded previous configuration from local storage.', 'success');
+                    validateInputs();
+                }
+            } else {
+                // Default both toggles to ON
+                els.toggleDeaths.classList.add('on');
+                els.toggleJoinLeave.classList.add('on');
+            }
+        });
+
+        // Input Listeners for real-time validation feedback
+        [els.token, els.webhook, els.channelId].forEach(input => {
+            input.addEventListener('input', validateInputs);
+        });
+
+        function validateInputs() {
+            state.token = els.token.value.trim();
+            state.webhook = els.webhook.value.trim();
+            state.channelId = els.channelId.value.trim();
+            state.configValid = state.token.length > 10 && state.webhook.length > 5;
+
+            // Update Webhook Status Badge
+            if (state.webhook.length > 5) {
+                setStatus(els.statusWebhook, 'Set', 'active');
+            } else {
+                setStatus(els.statusWebhook, 'Unset', '');
+            }
+        }
+
+        // Save Functionality
+        function saveSettings() {
+            const config = {
+                token: state.token,
+                webhook: state.webhook,
+                channelId: state.channelId,
+                sendDeaths: state.sendDeaths,
+                sendJoinLeave: state.sendJoinLeave
+            };
+            localStorage.setItem('reglia_config', JSON.stringify(config));
+
+            showToast('Configuration saved!', 'success');
+            log('Settings saved.', 'success');
+            validateInputs();
+        }
+
+        // Toggle Option (mini switches)
+        function toggleOption(option) {
+            if (option === 'deaths') {
+                state.sendDeaths = !state.sendDeaths;
+                els.toggleDeaths.classList.toggle('on', state.sendDeaths);
+            } else if (option === 'joinLeave') {
+                state.sendJoinLeave = !state.sendJoinLeave;
+                els.toggleJoinLeave.classList.toggle('on', state.sendJoinLeave);
+            }
+        }
+
+        // Main Toggle Logic
+        function toggleBot() {
+            const powerSwitch = document.getElementById('powerSwitch');
+
+            if (!state.configValid && !state.isRunning) {
+                showToast('Please enter a valid Bot Token and Webhook URL first.', 'error');
+                els.toggle.style.transform = 'translateX(5px)';
+                setTimeout(() => els.toggle.style.transform = 'translateX(-5px)', 50);
+                setTimeout(() => els.toggle.style.transform = 'none', 100);
+                return;
+            }
+
+            if (state.isRunning) {
+                // Stop sequence
+                state.isRunning = false;
+                els.toggle.classList.remove('active');
+                powerSwitch.classList.remove('on');
+                els.label.innerText = "Enable Reglia";
+
+                log('Stopping bridge service...');
+                setTimeout(() => {
+                    setStatus(els.statusBot, 'Disconnected', '');
+                    log('Bridge disconnected.', 'error');
+                }, 500);
+
+            } else {
+                // Start sequence
+                state.isRunning = true;
+                els.toggle.classList.add('active');
+                powerSwitch.classList.add('on');
+                els.label.innerText = "Disable Reglia";
+
+                log('Initializing connection...');
+
+                setTimeout(() => {
+                    setStatus(els.statusBot, 'Connecting...', '');
+                    log('Authenticating with Discord...');
+                }, 400);
+
+                setTimeout(() => {
+                    setStatus(els.statusBot, 'Connected', 'active');
+                    log('Bot connected successfully.');
+                    showToast('Reglia is now active!', 'success');
+                }, 1200);
+            }
+        }
+
+        // Helper: Update Status Badge
+        function setStatus(element, text, type) {
+            element.className = `status-badge ${type}`;
+            element.innerHTML = `<div class="dot"></div> ${text}`;
+        }
+
+        // Helper: Add Log Entry
+        function log(msg, type = 'msg') {
+            const time = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.innerHTML = `
+                <span class="log-time">[${time}]</span>
+                <span class="log-${type}">${msg}</span>
+            `;
+            els.console.appendChild(entry);
+            els.console.scrollTop = els.console.scrollHeight;
+        }
+
+        // Helper: Toast Notification
+        function showToast(message, type = 'success') {
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+
+            let icon = type === 'success' ? 'check-circle' : 'alert-circle';
+            let color = type === 'success' ? '#4ade80' : '#f87171';
+
+            toast.innerHTML = `
+                <i data-lucide="${icon}" size="18" style="color: ${color}"></i>
+                <span>${message}</span>
+            `;
+
+            els.toastContainer.appendChild(toast);
+            lucide.createIcons();
+
+            // Remove after 3 seconds
+            setTimeout(() => {
+                toast.classList.add('hiding');
+                toast.addEventListener('animationend', () => {
+                    toast.remove();
+                });
+            }, 3000);
+        }
+
+    </script>
+</body>
+
+</html>

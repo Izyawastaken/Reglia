@@ -17,7 +17,7 @@ public class Config {
     private static final Logger LOGGER = LogUtils.getLogger();
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final String CONFIG_FILE = "reglia-config.json";
-
+    
     private static ConfigData data = new ConfigData();
     private static Path configPath;
 
@@ -36,24 +36,21 @@ public class Config {
     public static String botToken = "";
     public static String channelId = "";
     public static boolean bridgeEnabled = true;
-    public static boolean sendDeaths = true;
-    public static boolean sendJoinLeave = true;
 
     public static void load() {
         try {
             configPath = Paths.get("config").resolve(CONFIG_FILE);
-
+            
             if (Files.exists(configPath)) {
                 String json = Files.readString(configPath);
                 data = GSON.fromJson(json, ConfigData.class);
-                if (data == null)
-                    data = new ConfigData();
+                if (data == null) data = new ConfigData();
                 LOGGER.info("[Reglia] Config loaded from: {}", configPath);
             } else {
                 save();
                 LOGGER.info("[Reglia] Created default config at: {}", configPath);
             }
-
+            
             // Sync static fields
             syncFields();
         } catch (Exception e) {
@@ -78,8 +75,6 @@ public class Config {
         botToken = data.botToken != null ? data.botToken : "";
         channelId = data.channelId != null ? data.channelId : "";
         bridgeEnabled = data.bridgeEnabled;
-        sendDeaths = data.sendDeaths;
-        sendJoinLeave = data.sendJoinLeave;
     }
 
     // Setters
@@ -98,24 +93,6 @@ public class Config {
     public static void setChannelId(String id) {
         data.channelId = id;
         channelId = id;
-        save();
-    }
-
-    public static void setBridgeEnabled(boolean enabled) {
-        data.bridgeEnabled = enabled;
-        bridgeEnabled = enabled;
-        save();
-    }
-
-    public static void setSendDeaths(boolean enabled) {
-        data.sendDeaths = enabled;
-        sendDeaths = enabled;
-        save();
-    }
-
-    public static void setSendJoinLeave(boolean enabled) {
-        data.sendJoinLeave = enabled;
-        sendJoinLeave = enabled;
         save();
     }
 
